@@ -301,11 +301,16 @@ tbody tr:hover{background:var(--surface-alt);}
 
 /* Report / print cards */
 .report-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;}
-.report-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;cursor:pointer;transition:.15s;}
+.report-card{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;cursor:pointer;transition:.15s;}
 .report-card:hover{border-color:var(--emerald-500);transform:translateY(-2px);box-shadow:var(--shadow-md);}
 .report-card .ic{width:44px;height:44px;border-radius:12px;background:var(--emerald-50);color:var(--emerald-700);display:flex;align-items:center;justify-content:center;font-size:19px;margin-bottom:12px;}
 .report-card h4{font-size:14px;}
 .report-card p{font-size:12px;color:var(--text-muted);margin-top:4px;}
+.report-card-actions{position:absolute;top:12px;right:12px;display:flex;gap:6px;z-index:2;}
+.report-card-actions button{width:26px;height:26px;border-radius:8px;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;color:var(--text-secondary);}
+.report-card-actions button:hover{border-color:var(--emerald-500);color:var(--emerald-700);}
+.report-card-add{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;border-style:dashed;color:var(--text-muted);font-weight:700;font-size:13px;min-height:110px;}
+.report-card-add:hover{color:var(--emerald-700);}
 
 .empty-state{text-align:center;padding:50px 20px;color:var(--text-muted);}
 .empty-state .ic{font-size:34px;margin-bottom:10px;}
@@ -727,6 +732,8 @@ function genSantri(){
   return list;
 }
 const DB = { santri: genSantri() };
+DB.kelasList = [...KELAS_LIST];
+DB.kamarList = [...KAMAR_PUTRA.map(n=>({nama:n, asrama:'Putra'})), ...KAMAR_PUTRI.map(n=>({nama:n, asrama:'Putri'}))];
 
 DB.pengurus = [
   { id:"P01", jabatan:"Pengasuh", nama:"KH. Ahmad Syafi'i Mubarok", level:0, foto:null, periode:"2025 - 2030", deskripsi:"Pengasuh dan pembina utama pondok pesantren.", kontak:"0811-2233-001", status:"Aktif" },
@@ -890,7 +897,9 @@ function collectSyncPayload(){
     setoranSafinah: DB.setoranSafinah,
     absensi: DB.absensi,
     pengumuman: DB.pengumuman,
-    notifikasi: DB.notifikasi
+    notifikasi: DB.notifikasi,
+    kelasList: DB.kelasList,
+    kamarList: DB.kamarList
   };
 }
 
@@ -905,6 +914,8 @@ function applySyncPayload(data){
   if(Array.isArray(data.absensi)) DB.absensi = data.absensi;
   if(Array.isArray(data.pengumuman)) DB.pengumuman = data.pengumuman;
   if(Array.isArray(data.notifikasi)) DB.notifikasi = data.notifikasi;
+  if(Array.isArray(data.kelasList)) DB.kelasList = data.kelasList;
+  if(Array.isArray(data.kamarList)) DB.kamarList = data.kamarList;
 }
 
 function saveToStorage(){
@@ -1481,7 +1492,7 @@ PUBLIC_VIEWS['struktur-publik'] = {
 PUBLIC_VIEWS['santri-publik'] = {
   render(){
     const active = DB.santri.filter(x=>x.statusSantri==='Aktif');
-    const byKelas = KELAS_LIST.map(k=>({label:k, value:active.filter(x=>x.kelas===k).length}));
+    const byKelas = DB.kelasList.map(k=>({label:k, value:active.filter(x=>x.kelas===k).length}));
     const putra = active.filter(x=>x.jenisKelamin==='L').length;
     const putri = active.filter(x=>x.jenisKelamin==='P').length;
     const asramaPutra = active.filter(x=>x.asrama==='Putra').length;
@@ -2139,7 +2150,7 @@ function santriForm(existing){
     <div class="field full"><label>Alamat</label><input class="input" id="f_alamat" value="${esc(s.alamat||'')}"></div>
 
     <div class="form-section-lbl">Data Pendidikan</div>
-    <div class="field"><label>Kelas</label><select class="input" id="f_kelas">${opt(KELAS_LIST, s.kelas)}</select></div>
+    <div class="field"><label>Kelas</label><select class="input" id="f_kelas">${opt(DB.kelasList, s.kelas)}</select></div>
     <div class="field"><label>Rombel</label><input class="input" id="f_rombel" value="${esc(s.rombel||'')}"></div>
     <div class="field"><label>Tahun Masuk</label><input class="input" id="f_tahunMasuk" value="${esc(s.tahunMasuk||'2026')}"></div>
     <div class="field"><label>Status Santri</label><select class="input" id="f_statusSantri">${opt(['Aktif','Cuti','Alumni','Keluar'], s.statusSantri)}</select></div>
@@ -2155,7 +2166,7 @@ function santriForm(existing){
 
     <div class="form-section-lbl">Data Pondok</div>
     <div class="field"><label>Asrama</label><select class="input" id="f_asrama"><option ${s.asrama==='Putra'?'selected':''}>Putra</option><option ${s.asrama==='Putri'?'selected':''}>Putri</option></select></div>
-    <div class="field"><label>Kamar</label><input class="input" id="f_kamar" value="${esc(s.kamar||'')}"></div>
+    <div class="field"><label>Kamar</label><select class="input" id="f_kamar">${opt(DB.kamarList.map(k=>k.nama).includes(s.kamar) || !s.kamar ? DB.kamarList.map(k=>k.nama) : [...DB.kamarList.map(k=>k.nama), s.kamar], s.kamar)}</select></div>
     <div class="field"><label>Nomor Kamar</label><input class="input" id="f_nomorKamar" value="${esc(s.nomorKamar||'')}"></div>
     <div class="field"><label>Pembimbing</label><input class="input" id="f_pembimbing" value="${esc(s.pembimbing||'')}"></div>
     <div class="field full"><label>Status Mukim</label><select class="input" id="f_statusMukim"><option ${s.statusMukim==='Mukim'?'selected':''}>Mukim</option><option ${s.statusMukim==='Non-Mukim'?'selected':''}>Non-Mukim</option></select></div>
@@ -2219,9 +2230,9 @@ function santriListRender(){
   <div class="card card-pad">
     <div class="table-toolbar">
       <div class="search-wrap" style="position:static;"><span class="sic">&#128269;</span><input class="input" style="padding-left:36px;" id="santriSearch" placeholder="Cari nama / nomor induk..." value="${esc(santriUIState.search)}"></div>
-      <select class="select-filter" id="filterKelas"><option value="">Semua Kelas</option>${KELAS_LIST.map(k=>`<option value="${k}" ${santriUIState.kelas===k?'selected':''}>${k}</option>`).join('')}</select>
+      <select class="select-filter" id="filterKelas"><option value="">Semua Kelas</option>${DB.kelasList.map(k=>`<option value="${k}" ${santriUIState.kelas===k?'selected':''}>${k}</option>`).join('')}</select>
       <select class="select-filter" id="filterGender"><option value="">Semua Gender</option><option value="L" ${santriUIState.gender==='L'?'selected':''}>Laki-laki</option><option value="P" ${santriUIState.gender==='P'?'selected':''}>Perempuan</option></select>
-      <select class="select-filter" id="filterKamar"><option value="">Semua Kamar</option>${[...KAMAR_PUTRA,...KAMAR_PUTRI].map(k=>`<option value="${k}" ${santriUIState.kamar===k?'selected':''}>${k}</option>`).join('')}</select>
+      <select class="select-filter" id="filterKamar"><option value="">Semua Kamar</option>${DB.kamarList.map(k=>k.nama).map(k=>`<option value="${k}" ${santriUIState.kamar===k?'selected':''}>${k}</option>`).join('')}</select>
     </div>
     <div class="table-wrap">
       <table>
@@ -2337,39 +2348,148 @@ function printKartuSantri(s){
   </div>`, 'Kartu Santri');
 }
 
+/* ---------- Kelola Kelas & Kamar (tambah/edit/hapus) ---------- */
+function kelasNameTaken(nama, exceptName){
+  return DB.kelasList.some(k=>k.toLowerCase()===nama.toLowerCase() && k!==exceptName);
+}
+function openKelasModal(existingName){
+  const isEdit = existingName != null;
+  openModal(`
+    <div class="modal-head"><h3>${isEdit?'Edit Kelas':'Tambah Kelas'}</h3><button class="btn-icon" data-close-modal>&times;</button></div>
+    <div class="modal-body">
+      <div class="field"><label>Nama Kelas</label><input class="input" id="f_namaKelas" value="${esc(existingName||'')}" placeholder="mis. 7C" autofocus></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-outline" data-close-modal>Batal</button><button class="btn btn-primary" id="saveKelasBtn">Simpan</button></div>
+  `);
+  document.getElementById('saveKelasBtn').addEventListener('click', ()=>{
+    const nama = document.getElementById('f_namaKelas').value.trim();
+    if(!nama){ toast('Nama kelas wajib diisi.','err'); return; }
+    if(kelasNameTaken(nama, isEdit?existingName:null)){ toast('Nama kelas tersebut sudah ada.','err'); return; }
+    if(isEdit){
+      DB.santri.forEach(s=>{
+        if(s.kelas===existingName){
+          if(s.rombel && s.rombel.indexOf(existingName)===0) s.rombel = nama + s.rombel.slice(existingName.length);
+          s.kelas = nama;
+        }
+      });
+      const idx = DB.kelasList.indexOf(existingName);
+      DB.kelasList[idx] = nama;
+      toast('Kelas berhasil diperbarui.');
+    } else {
+      DB.kelasList.push(nama);
+      toast('Kelas baru berhasil ditambahkan.');
+    }
+    saveToStorage();
+    closeModal();
+    navigate('santri-kelas');
+  });
+}
+function deleteKelas(nama){
+  const count = DB.santri.filter(s=>s.kelas===nama).length;
+  if(count>0){ toast(`Tidak bisa menghapus, masih ada ${count} santri di kelas ${nama}. Pindahkan santri terlebih dahulu.`,'err'); return; }
+  confirmDelete(`Hapus kelas "${nama}"? Tindakan ini tidak bisa dibatalkan.`, ()=>{
+    DB.kelasList = DB.kelasList.filter(k=>k!==nama);
+    saveToStorage();
+    toast('Kelas berhasil dihapus.');
+    navigate('santri-kelas');
+  });
+}
+
+function kamarNameTaken(nama, exceptName){
+  return DB.kamarList.some(k=>k.nama.toLowerCase()===nama.toLowerCase() && k.nama!==exceptName);
+}
+function openKamarModal(existingName){
+  const existing = existingName!=null ? DB.kamarList.find(k=>k.nama===existingName) : null;
+  const isEdit = !!existing;
+  openModal(`
+    <div class="modal-head"><h3>${isEdit?'Edit Kamar':'Tambah Kamar'}</h3><button class="btn-icon" data-close-modal>&times;</button></div>
+    <div class="modal-body">
+      <div class="field"><label>Nama Kamar</label><input class="input" id="f_namaKamar" value="${esc(existing?existing.nama:'')}" placeholder="mis. Ar-Raudhah 3" autofocus></div>
+      <div class="field"><label>Asrama</label><select class="input" id="f_asramaKamar"><option ${existing&&existing.asrama==='Putra'?'selected':''}>Putra</option><option ${existing&&existing.asrama==='Putri'?'selected':''}>Putri</option></select></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-outline" data-close-modal>Batal</button><button class="btn btn-primary" id="saveKamarBtn">Simpan</button></div>
+  `);
+  document.getElementById('saveKamarBtn').addEventListener('click', ()=>{
+    const nama = document.getElementById('f_namaKamar').value.trim();
+    const asrama = document.getElementById('f_asramaKamar').value;
+    if(!nama){ toast('Nama kamar wajib diisi.','err'); return; }
+    if(kamarNameTaken(nama, isEdit?existing.nama:null)){ toast('Nama kamar tersebut sudah ada.','err'); return; }
+    if(isEdit){
+      DB.santri.forEach(s=>{ if(s.kamar===existing.nama){ s.kamar=nama; s.asrama=asrama; } });
+      const idx = DB.kamarList.findIndex(k=>k.nama===existing.nama);
+      DB.kamarList[idx] = { nama, asrama };
+      toast('Kamar berhasil diperbarui.');
+    } else {
+      DB.kamarList.push({ nama, asrama });
+      toast('Kamar baru berhasil ditambahkan.');
+    }
+    saveToStorage();
+    closeModal();
+    navigate('santri-kamar');
+  });
+}
+function deleteKamar(nama){
+  const count = DB.santri.filter(s=>s.kamar===nama).length;
+  if(count>0){ toast(`Tidak bisa menghapus, masih ada ${count} santri di kamar ${nama}. Pindahkan santri terlebih dahulu.`,'err'); return; }
+  confirmDelete(`Hapus kamar "${nama}"? Tindakan ini tidak bisa dibatalkan.`, ()=>{
+    DB.kamarList = DB.kamarList.filter(k=>k.nama!==nama);
+    saveToStorage();
+    toast('Kamar berhasil dihapus.');
+    navigate('santri-kamar');
+  });
+}
+
 /* ---------- santri-kelas ---------- */
 VIEWS['santri-kelas'] = {
   render(){
-    const groups = KELAS_LIST.map(k=>({ kelas:k, members: DB.santri.filter(s=>s.kelas===k) }));
-    return `${pageHead('Kelas', 'Distribusi santri berdasarkan rombongan belajar')}
+    const canEdit = ['admin','pengurus'].includes(STATE.currentUser.role);
+    const groups = DB.kelasList.map(k=>({ kelas:k, members: DB.santri.filter(s=>s.kelas===k) }));
+    return `${pageHead('Kelas', 'Distribusi santri berdasarkan rombongan belajar', canEdit?`<button class="btn btn-primary" id="addKelasBtn">+ Tambah Kelas</button>`:'')}
     <div class="report-grid">
       ${groups.map(g=>`
-        <div class="report-card" data-kelas="${g.kelas}">
+        <div class="report-card" data-kelas="${esc(g.kelas)}">
+          ${canEdit?`<div class="report-card-actions no-print"><button data-edit-kelas="${esc(g.kelas)}" title="Edit">&#9998;</button><button data-del-kelas="${esc(g.kelas)}" title="Hapus">&#128465;</button></div>`:''}
           <div class="ic">&#127891;</div>
-          <h4>Kelas ${g.kelas}</h4>
+          <h4>Kelas ${esc(g.kelas)}</h4>
           <p>${g.members.length} santri • ${g.members.filter(m=>m.jenisKelamin==='L').length} L / ${g.members.filter(m=>m.jenisKelamin==='P').length} P</p>
         </div>`).join('')}
+      ${canEdit?`<div class="report-card report-card-add" id="addKelasCard"><div style="font-size:26px;">+</div>Tambah Kelas</div>`:''}
     </div>`;
   },
-  bind(){ on('[data-kelas]','click', e=>{ santriUIState.kelas=e.currentTarget.dataset.kelas; santriUIState.search=''; santriUIState.gender=''; santriUIState.kamar=''; navigate('santri-list'); }); }
+  bind(){
+    on('[data-kelas]','click', e=>{ santriUIState.kelas=e.currentTarget.dataset.kelas; santriUIState.search=''; santriUIState.gender=''; santriUIState.kamar=''; navigate('santri-list'); });
+    on('[data-edit-kelas]','click', e=>{ e.stopPropagation(); openKelasModal(e.currentTarget.dataset.editKelas); });
+    on('[data-del-kelas]','click', e=>{ e.stopPropagation(); deleteKelas(e.currentTarget.dataset.delKelas); });
+    const addBtn = document.getElementById('addKelasBtn'); if(addBtn) addBtn.addEventListener('click', ()=>openKelasModal(null));
+    const addCard = document.getElementById('addKelasCard'); if(addCard) addCard.addEventListener('click', ()=>openKelasModal(null));
+  }
 };
 
 /* ---------- santri-kamar ---------- */
 VIEWS['santri-kamar'] = {
   render(){
-    const groups = [...KAMAR_PUTRA,...KAMAR_PUTRI].map(k=>({ kamar:k, members: DB.santri.filter(s=>s.kamar===k) }));
-    return `${pageHead('Kamar / Asrama', 'Distribusi santri berdasarkan kamar dan asrama')}
+    const canEdit = ['admin','pengurus'].includes(STATE.currentUser.role);
+    const groups = DB.kamarList.map(k=>({ kamar:k.nama, asrama:k.asrama, members: DB.santri.filter(s=>s.kamar===k.nama) }));
+    return `${pageHead('Kamar / Asrama', 'Distribusi santri berdasarkan kamar dan asrama', canEdit?`<button class="btn btn-primary" id="addKamarBtn">+ Tambah Kamar</button>`:'')}
     <div class="report-grid">
       ${groups.map(g=>`
         <div class="report-card" data-kamar="${esc(g.kamar)}">
+          ${canEdit?`<div class="report-card-actions no-print"><button data-edit-kamar="${esc(g.kamar)}" title="Edit">&#9998;</button><button data-del-kamar="${esc(g.kamar)}" title="Hapus">&#128465;</button></div>`:''}
           <div class="ic">&#127968;</div>
           <h4>${esc(g.kamar)}</h4>
           <p>${g.members.length} santri terdaftar</p>
-          <span class="tag-badge">${g.members[0]?g.members[0].asrama:''}</span>
+          <span class="tag-badge">${esc(g.asrama)}</span>
         </div>`).join('')}
+      ${canEdit?`<div class="report-card report-card-add" id="addKamarCard"><div style="font-size:26px;">+</div>Tambah Kamar</div>`:''}
     </div>`;
   },
-  bind(){ on('[data-kamar]','click', e=>{ santriUIState.kamar=e.currentTarget.dataset.kamar; santriUIState.search=''; santriUIState.gender=''; santriUIState.kelas=''; navigate('santri-list'); }); }
+  bind(){
+    on('[data-kamar]','click', e=>{ santriUIState.kamar=e.currentTarget.dataset.kamar; santriUIState.search=''; santriUIState.gender=''; santriUIState.kelas=''; navigate('santri-list'); });
+    on('[data-edit-kamar]','click', e=>{ e.stopPropagation(); openKamarModal(e.currentTarget.dataset.editKamar); });
+    on('[data-del-kamar]','click', e=>{ e.stopPropagation(); deleteKamar(e.currentTarget.dataset.delKamar); });
+    const addBtn = document.getElementById('addKamarBtn'); if(addBtn) addBtn.addEventListener('click', ()=>openKamarModal(null));
+    const addCard = document.getElementById('addKamarCard'); if(addCard) addCard.addEventListener('click', ()=>openKamarModal(null));
+  }
 };
 
 /* ---------- santri-detail (Profil Santri) ---------- */
@@ -2787,7 +2907,7 @@ VIEWS['quran-rekap'] = {
     <div class="grid-2">
       <div class="card card-pad"><div class="section-title" style="margin-bottom:12px;">Distribusi Kelancaran Setoran</div>${svgBarChart(byKelancaran,{max:Math.max(...byKelancaran.map(b=>b.value),5)})}</div>
       <div class="card card-pad"><div class="section-title" style="margin-bottom:12px;">Progres per Kelas (rata-rata %)</div>
-        ${KELAS_LIST.map(k=>{ const members = DB.santri.filter(s=>s.kelas===k); if(!members.length) return ''; const avg = Math.round(members.reduce((a,s)=>a+s.quranProgress.reduce((x,p)=>x+p.persen,0)/30,0)/members.length); return `<div class="progress-row"><div class="lbl">${k}</div><div class="progress-track"><div class="progress-fill" style="width:${avg}%"></div></div><div class="progress-pct">${avg}%</div></div>`; }).join('')}
+        ${DB.kelasList.map(k=>{ const members = DB.santri.filter(s=>s.kelas===k); if(!members.length) return ''; const avg = Math.round(members.reduce((a,s)=>a+s.quranProgress.reduce((x,p)=>x+p.persen,0)/30,0)/members.length); return `<div class="progress-row"><div class="lbl">${esc(k)}</div><div class="progress-track"><div class="progress-fill" style="width:${avg}%"></div></div><div class="progress-pct">${avg}%</div></div>`; }).join('')}
       </div>
     </div>`;
   },
@@ -2882,7 +3002,7 @@ VIEWS['safinah-rekap'] = {
       <div class="stat-card"><div class="val">${sudahSetor}</div><div class="lbl">Status Sudah Setor</div></div>
     </div>
     <div class="card card-pad"><div class="section-title" style="margin-bottom:12px;">Progres per Kelas (rata-rata %)</div>
-      ${KELAS_LIST.map(k=>{ const members = DB.santri.filter(s=>s.kelas===k); if(!members.length) return ''; const avg = Math.round(members.reduce((a,s)=>a+s.safinahProgress.reduce((x,p)=>x+p.persen,0)/8,0)/members.length); return `<div class="progress-row"><div class="lbl">${k}</div><div class="progress-track"><div class="progress-fill gold" style="width:${avg}%"></div></div><div class="progress-pct">${avg}%</div></div>`; }).join('')}
+      ${DB.kelasList.map(k=>{ const members = DB.santri.filter(s=>s.kelas===k); if(!members.length) return ''; const avg = Math.round(members.reduce((a,s)=>a+s.safinahProgress.reduce((x,p)=>x+p.persen,0)/8,0)/members.length); return `<div class="progress-row"><div class="lbl">${esc(k)}</div><div class="progress-track"><div class="progress-fill gold" style="width:${avg}%"></div></div><div class="progress-pct">${avg}%</div></div>`; }).join('')}
     </div>`;
   },
   bind(){ const b=document.getElementById('rkSExcel'); if(b) b.addEventListener('click', ()=>exportRowsToExcel('Rekap-Hafalan-Safinah.xlsx', ['Santri','Tanggal','Bab','Materi','Nilai','Kelancaran','Status','Penyimak'], DB.setoranSafinah.map(x=>[x.santriNama,x.tanggal,x.bab,x.materi,x.nilai,x.kelancaran,x.status,x.penyimak]))); }
@@ -2973,7 +3093,7 @@ VIEWS['absensi-rekap'] = {
     <div class="card card-pad" style="margin-bottom:18px;">
       <div class="table-toolbar">
         <input type="date" class="input select-filter" id="fltTgl" value="${absensiUIState.filterTgl}">
-        <select class="select-filter" id="fltKelas"><option value="">Semua Kelas</option>${KELAS_LIST.map(k=>`<option ${absensiUIState.filterKelas===k?'selected':''}>${k}</option>`).join('')}</select>
+        <select class="select-filter" id="fltKelas"><option value="">Semua Kelas</option>${DB.kelasList.map(k=>`<option ${absensiUIState.filterKelas===k?'selected':''}>${esc(k)}</option>`).join('')}</select>
         <select class="select-filter" id="fltKeg"><option value="">Semua Kegiatan</option>${DB.kegiatan.map(k=>`<option value="${k.id}" ${absensiUIState.filterKeg===k.id?'selected':''}>${esc(k.nama)}</option>`).join('')}</select>
       </div>
       ${svgBarChart(byStatus, {max: Math.max(...byStatus.map(b=>b.value),5)})}
