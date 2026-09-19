@@ -878,6 +878,7 @@ let serverSyncFailWarned = false;
 let saveDebounceTimer = null;
 let lastSyncedJSON = null;
 let isApplyingRemoteData = false;
+let hadLocalCacheOnBoot = false;
 
 function collectSyncPayload(){
   return {
@@ -955,6 +956,7 @@ function loadFromStorage(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
     if(raw){
+      hadLocalCacheOnBoot = true;
       const data = JSON.parse(raw);
       applySyncPayload(data);
     }
@@ -971,6 +973,7 @@ function loadFromServer(){
     return res.json();
   }).then(data=>{
     if(data && typeof data === 'object' && Object.keys(data).length){
+      // Server sudah punya data bersama -- pakai itu sebagai sumber kebenaran di semua perangkat.
       isApplyingRemoteData = true;
       applySyncPayload(data);
       const json = JSON.stringify(collectSyncPayload());
@@ -978,6 +981,13 @@ function loadFromServer(){
       lastSyncedJSON = json;
       isApplyingRemoteData = false;
       render();
+    } else if(hadLocalCacheOnBoot){
+      // Server belum punya data sama sekali, TAPI perangkat ini sudah pernah
+      // menyimpan data secara lokal sebelum fitur sinkron ini ada -- kirim data
+      // itu sekali supaya jadi data bersama, tanpa menunggu admin klik Simpan lagi.
+      // (Perangkat yang baru pertama kali dibuka dan belum punya cache lokal TIDAK
+      // memicu ini, supaya tidak diam-diam menimpa data server dengan nilai bawaan.)
+      syncToServer(JSON.stringify(collectSyncPayload()));
     }
   }).catch(err=>{
     console.warn('Gagal memuat data terbaru dari server (memakai data lokal untuk sementara):', err);
