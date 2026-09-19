@@ -858,33 +858,61 @@ DB.notifikasi = [
 ];
 
 /* ============================================================
-   PENYIMPANAN LOKAL (localStorage)
+   PENYIMPANAN & SINKRONISASI DATA
    Semua perubahan yang dibuat Admin/Pengurus/Ustadz (Pengaturan,
    Data Santri, Struktur Pengurus, Kegiatan, Hafalan, Absensi,
-   Pengumuman) disimpan di localStorage browser ini, lalu dimuat
-   ulang saat halaman dibuka lagi -- termasuk saat membuka halaman
-   publik di tab/kunjungan baru pada browser & perangkat yang sama.
-   Catatan: ini penyimpanan sisi-klien (per-browser), bukan basis
-   data server, sehingga tidak otomatis tersinkron ke perangkat
-   pengunjung lain. Untuk itu diperlukan backend + database.
+   Pengumuman) disimpan ke SERVER (lewat /api/data) sehingga data
+   yang sama muncul di semua perangkat -- HP Android/iOS maupun
+   laptop/MacBook -- bukan cuma di browser tempat perubahan dibuat.
+   localStorage tetap dipakai sebagai cache lokal supaya halaman
+   langsung tampil cepat saat dibuka, lalu disegarkan dengan data
+   terbaru dari server begitu berhasil dimuat.
+   Catatan: ini "last write wins" per seluruh data -- kalau dua
+   perangkat menyimpan perubahan dalam waktu yang sangat berdekatan,
+   perubahan yang tersimpan paling akhir yang dipakai.
    ============================================================ */
 const STORAGE_KEY = 'epondokSmpDataV1';
+const SYNC_API_URL = '/api/data';
 let storageQuotaWarned = false;
+let serverSyncFailWarned = false;
+let saveDebounceTimer = null;
+let lastSyncedJSON = null;
+let isApplyingRemoteData = false;
+
+function collectSyncPayload(){
+  return {
+    settings: STATE.settings,
+    santri: DB.santri,
+    pengurus: DB.pengurus,
+    kegiatan: DB.kegiatan,
+    setoranQuran: DB.setoranQuran,
+    setoranSafinah: DB.setoranSafinah,
+    absensi: DB.absensi,
+    pengumuman: DB.pengumuman,
+    notifikasi: DB.notifikasi
+  };
+}
+
+function applySyncPayload(data){
+  if(!data || typeof data !== 'object') return;
+  if(data.settings && typeof data.settings === 'object') Object.assign(STATE.settings, data.settings);
+  if(Array.isArray(data.santri)) DB.santri = data.santri;
+  if(Array.isArray(data.pengurus)) DB.pengurus = data.pengurus;
+  if(Array.isArray(data.kegiatan)) DB.kegiatan = data.kegiatan;
+  if(Array.isArray(data.setoranQuran)) DB.setoranQuran = data.setoranQuran;
+  if(Array.isArray(data.setoranSafinah)) DB.setoranSafinah = data.setoranSafinah;
+  if(Array.isArray(data.absensi)) DB.absensi = data.absensi;
+  if(Array.isArray(data.pengumuman)) DB.pengumuman = data.pengumuman;
+  if(Array.isArray(data.notifikasi)) DB.notifikasi = data.notifikasi;
+}
 
 function saveToStorage(){
+  if(isApplyingRemoteData) return; // jangan kirim balik data yang baru saja dimuat dari server
+  let json;
   try{
-    const payload = {
-      settings: STATE.settings,
-      santri: DB.santri,
-      pengurus: DB.pengurus,
-      kegiatan: DB.kegiatan,
-      setoranQuran: DB.setoranQuran,
-      setoranSafinah: DB.setoranSafinah,
-      absensi: DB.absensi,
-      pengumuman: DB.pengumuman,
-      notifikasi: DB.notifikasi
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    const payload = collectSyncPayload();
+    json = JSON.stringify(payload);
+    localStorage.setItem(STORAGE_KEY, json);
     storageQuotaWarned = false;
   }catch(e){
     console.warn('Gagal menyimpan data lokal:', e);
@@ -896,25 +924,64 @@ function saveToStorage(){
       toast('Penyimpanan browser penuh, sebagian perubahan (mis. logo) mungkin tidak tersimpan. Coba gunakan gambar berukuran lebih kecil.', 'err');
     }
   }
+  // Sinkronkan ke server supaya perangkat lain (HP/laptop) melihat data yang sama.
+  // Di-debounce supaya render() yang terjadi berkali-kali (navigasi, buka menu, dst.)
+  // tidak mengirim request berulang -- hanya dikirim begitu perubahan "diam" sejenak.
+  if(json && json !== lastSyncedJSON){
+    clearTimeout(saveDebounceTimer);
+    saveDebounceTimer = setTimeout(()=>syncToServer(json), 600);
+  }
+}
+
+function syncToServer(json){
+  if(typeof fetch !== 'function') return;
+  lastSyncedJSON = json;
+  fetch(SYNC_API_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body: json })
+    .then(res=>{
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      serverSyncFailWarned = false;
+    })
+    .catch(err=>{
+      console.warn('Gagal menyinkronkan data ke server:', err);
+      if(!serverSyncFailWarned && typeof toast === 'function'){
+        serverSyncFailWarned = true;
+        toast('Gagal menyinkronkan data ke server. Periksa koneksi internet Anda -- perubahan tersimpan sementara di perangkat ini saja.', 'err');
+      }
+    });
 }
 
 function loadFromStorage(){
+  // Muat cache lokal dulu supaya halaman langsung tampil (tidak menunggu jaringan).
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
-    if(!raw) return;
-    const data = JSON.parse(raw);
-    if(data && typeof data === 'object'){
-      if(data.settings && typeof data.settings === 'object') Object.assign(STATE.settings, data.settings);
-      if(Array.isArray(data.santri)) DB.santri = data.santri;
-      if(Array.isArray(data.pengurus)) DB.pengurus = data.pengurus;
-      if(Array.isArray(data.kegiatan)) DB.kegiatan = data.kegiatan;
-      if(Array.isArray(data.setoranQuran)) DB.setoranQuran = data.setoranQuran;
-      if(Array.isArray(data.setoranSafinah)) DB.setoranSafinah = data.setoranSafinah;
-      if(Array.isArray(data.absensi)) DB.absensi = data.absensi;
-      if(Array.isArray(data.pengumuman)) DB.pengumuman = data.pengumuman;
-      if(Array.isArray(data.notifikasi)) DB.notifikasi = data.notifikasi;
+    if(raw){
+      const data = JSON.parse(raw);
+      applySyncPayload(data);
     }
   }catch(e){ console.warn('Gagal memuat data lokal:', e); }
+  // Tandai baseline ini supaya render() pertama (dipicu navigasi/boot biasa) TIDAK
+  // langsung mengirim ulang data yang sama ke server -- hanya perubahan nyata yang dikirim.
+  try{ lastSyncedJSON = JSON.stringify(collectSyncPayload()); }catch(e){ lastSyncedJSON = null; }
+}
+
+function loadFromServer(){
+  if(typeof fetch !== 'function') return Promise.resolve();
+  return fetch(SYNC_API_URL).then(res=>{
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    return res.json();
+  }).then(data=>{
+    if(data && typeof data === 'object' && Object.keys(data).length){
+      isApplyingRemoteData = true;
+      applySyncPayload(data);
+      const json = JSON.stringify(collectSyncPayload());
+      try{ localStorage.setItem(STORAGE_KEY, json); }catch(e){}
+      lastSyncedJSON = json;
+      isApplyingRemoteData = false;
+      render();
+    }
+  }).catch(err=>{
+    console.warn('Gagal memuat data terbaru dari server (memakai data lokal untuk sementara):', err);
+  });
 }
 
 /* ============================================================
@@ -3236,6 +3303,7 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
 /* ============================================================
    BOOT
    ============================================================ */
-loadFromStorage();
+loadFromStorage(); // tampilkan cache lokal dulu, biar cepat
 render();
+loadFromServer();  // lalu segarkan dengan data terbaru dari server (sinkron antar perangkat)
 </script>
