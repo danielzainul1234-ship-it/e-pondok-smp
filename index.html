@@ -545,6 +545,7 @@ const STATE = {
   routeParams: {},
   sidebarOpen: false,
   openDropdown: null,
+  pengaturanTab: "identitas",
   searchQuery: "",
   navOpenGroups: { santri:true, hafalanQuran:false, hafalanSafinah:false, kegiatan:false, absensi:false, laporan:false, struktur:false },
   calMonth: new Date(2026,8,1),
@@ -2952,14 +2953,18 @@ VIEWS['profil-saya'] = {
 VIEWS['pengaturan'] = {
   render(){
     const s = STATE.settings;
+    const pt = STATE.pengaturanTab || 'identitas';
+    const tabActive = key => pt===key ? 'active' : '';
+    const panelHidden = key => pt===key ? '' : 'hidden';
     return `${pageHead('Pengaturan Sistem', 'Kelola identitas pondok, akun, dan data sistem')}
     <div class="tabs no-print">
-      <div class="tab-btn active" data-tab="identitas">Identitas Pondok</div>
-      <div class="tab-btn" data-tab="akun">Pengaturan Akun</div>
-      <div class="tab-btn" data-tab="role">Pengaturan Role</div>
-      <div class="tab-btn" data-tab="backup">Backup &amp; Restore</div>
+      <div class="tab-btn ${tabActive('identitas')}" data-tab="identitas">Identitas Pondok</div>
+      <div class="tab-btn ${tabActive('profil')}" data-tab="profil">Profil Pondok</div>
+      <div class="tab-btn ${tabActive('akun')}" data-tab="akun">Pengaturan Akun</div>
+      <div class="tab-btn ${tabActive('role')}" data-tab="role">Pengaturan Role</div>
+      <div class="tab-btn ${tabActive('backup')}" data-tab="backup">Backup &amp; Restore</div>
     </div>
-    <div id="tabIdentitas" class="tab-panel">
+    <div id="tabIdentitas" class="tab-panel ${panelHidden('identitas')}">
       <div class="grid-2">
         <div class="card card-pad">
           <div class="section-title" style="margin-bottom:14px;">Informasi Pondok</div>
@@ -2986,7 +2991,33 @@ VIEWS['pengaturan'] = {
         </div>
       </div>
     </div>
-    <div id="tabAkun" class="tab-panel hidden">
+    <div id="tabProfil" class="tab-panel ${panelHidden('profil')}">
+      <div class="card card-pad">
+        <div class="section-title" style="margin-bottom:6px;">Profil Pondok (Tampil di Situs Publik)</div>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">Isi bagian ini digunakan pada halaman publik "Beranda" (Tentang Pondok) dan "Profil Pondok" — Sejarah, Visi, Misi, dan Nilai-nilai Pondok.</p>
+        <div class="form-grid">
+          <div class="field full"><label>Sejarah Pondok</label><textarea class="input" id="st_sejarah" rows="5" style="resize:vertical;">${esc(s.sejarah)}</textarea></div>
+          <div class="field full"><label>Visi</label><textarea class="input" id="st_visi" rows="3" style="resize:vertical;">${esc(s.visi)}</textarea></div>
+        </div>
+        <div class="field full" style="margin-top:14px;">
+          <label>Misi</label>
+          <div id="misiList">
+            ${s.misi.map(m=>`<div class="misi-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:center;"><input class="input misi-input" value="${esc(m)}" style="flex:1;"><button type="button" class="btn-icon" data-remove-misi title="Hapus">&times;</button></div>`).join('')}
+          </div>
+          <button type="button" class="btn btn-outline btn-sm" id="addMisiBtn">&#43; Tambah Misi</button>
+        </div>
+        <div class="field full" style="margin-top:18px;">
+          <label>Nilai-nilai Pondok (ikon &amp; label)</label>
+          <div id="nilaiList">
+            ${s.nilai.map(n=>`<div class="nilai-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:center;"><input class="input nilai-ic" value="${n.ic}" placeholder="Ikon" style="width:70px;text-align:center;flex:none;"><input class="input nilai-label" value="${esc(n.label)}" placeholder="Label" style="flex:1;"><button type="button" class="btn-icon" data-remove-nilai title="Hapus">&times;</button></div>`).join('')}
+          </div>
+          <button type="button" class="btn btn-outline btn-sm" id="addNilaiBtn">&#43; Tambah Nilai</button>
+          <p style="font-size:11.5px;color:var(--text-muted);margin-top:6px;">Isi kolom ikon dengan satu emoji, mis. &#128214; &#127963; &#10084; &#129497;</p>
+        </div>
+        <button class="btn btn-primary" id="saveProfilBtn" style="margin-top:18px;">Simpan Profil Pondok</button>
+      </div>
+    </div>
+    <div id="tabAkun" class="tab-panel ${panelHidden('akun')}">
       <div class="card card-pad">
         <div class="section-title" style="margin-bottom:14px;">Akun Saya</div>
         <div class="form-grid">
@@ -2998,7 +3029,7 @@ VIEWS['pengaturan'] = {
         <button class="btn btn-primary" id="changePwBtn" style="margin-top:8px;">Perbarui Kata Sandi</button>
       </div>
     </div>
-    <div id="tabRole" class="tab-panel hidden">
+    <div id="tabRole" class="tab-panel ${panelHidden('role')}">
       <div class="card card-pad">
         <div class="section-title" style="margin-bottom:14px;">Hak Akses Role</div>
         <div class="table-wrap" style="border:none;"><table><thead><tr><th>Role</th><th>Deskripsi Akses</th></tr></thead>
@@ -3010,7 +3041,7 @@ VIEWS['pengaturan'] = {
         </tbody></table></div>
       </div>
     </div>
-    <div id="tabBackup" class="tab-panel hidden">
+    <div id="tabBackup" class="tab-panel ${panelHidden('backup')}">
       <div class="card card-pad">
         <div class="section-title" style="margin-bottom:10px;">Backup &amp; Restore Database</div>
         <p style="font-size:12.8px;color:var(--text-secondary);margin-bottom:16px;">Buat cadangan seluruh data sistem (santri, pengurus, kegiatan, hafalan, absensi) atau pulihkan dari cadangan sebelumnya.</p>
@@ -3040,8 +3071,45 @@ VIEWS['pengaturan'] = {
       $all('.tab-btn').forEach(t=>t.classList.remove('active'));
       e.currentTarget.classList.add('active');
       const tab = e.currentTarget.dataset.tab;
+      STATE.pengaturanTab = tab;
       $all('.tab-panel').forEach(p=>p.classList.add('hidden'));
       document.getElementById('tab'+tab.charAt(0).toUpperCase()+tab.slice(1)).classList.remove('hidden');
+    });
+    const addMisiBtn = document.getElementById('addMisiBtn');
+    if(addMisiBtn) addMisiBtn.addEventListener('click', ()=>{
+      const wrap = document.getElementById('misiList');
+      const row = document.createElement('div');
+      row.className = 'misi-row';
+      row.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;align-items:center;';
+      row.innerHTML = `<input class="input misi-input" placeholder="Tulis misi..." style="flex:1;"><button type="button" class="btn-icon" data-remove-misi title="Hapus">&times;</button>`;
+      wrap.appendChild(row);
+      row.querySelector('.misi-input').focus();
+    });
+    const addNilaiBtn = document.getElementById('addNilaiBtn');
+    if(addNilaiBtn) addNilaiBtn.addEventListener('click', ()=>{
+      const wrap = document.getElementById('nilaiList');
+      const row = document.createElement('div');
+      row.className = 'nilai-row';
+      row.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;align-items:center;';
+      row.innerHTML = `<input class="input nilai-ic" placeholder="Ikon" style="width:70px;text-align:center;flex:none;"><input class="input nilai-label" placeholder="Label" style="flex:1;"><button type="button" class="btn-icon" data-remove-nilai title="Hapus">&times;</button>`;
+      wrap.appendChild(row);
+      row.querySelector('.nilai-ic').focus();
+    });
+    on('[data-remove-misi]','click', e=>{ e.currentTarget.closest('.misi-row').remove(); });
+    on('[data-remove-nilai]','click', e=>{ e.currentTarget.closest('.nilai-row').remove(); });
+    const saveProfilBtn = document.getElementById('saveProfilBtn');
+    if(saveProfilBtn) saveProfilBtn.addEventListener('click', ()=>{
+      const sejarah = document.getElementById('st_sejarah').value.trim();
+      const visi = document.getElementById('st_visi').value.trim();
+      const misi = $all('.misi-input').map(i=>i.value.trim()).filter(v=>v);
+      const nilai = $all('.nilai-row').map(row=>({
+        ic: row.querySelector('.nilai-ic').value.trim(),
+        label: row.querySelector('.nilai-label').value.trim()
+      })).filter(n=>n.label);
+      if(!sejarah || !visi || !misi.length){ toast('Sejarah, Visi, dan minimal 1 Misi wajib diisi.'); return; }
+      Object.assign(STATE.settings, { sejarah, visi, misi, nilai });
+      STATE.pengaturanTab = 'profil';
+      toast('Profil pondok berhasil disimpan.'); render();
     });
     const pwBtn = document.getElementById('changePwBtn'); if(pwBtn) pwBtn.addEventListener('click', ()=>toast('Kata sandi berhasil diperbarui.'));
     const bkBtn = document.getElementById('backupBtn'); if(bkBtn) bkBtn.addEventListener('click', ()=>{
