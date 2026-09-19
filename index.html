@@ -598,6 +598,7 @@ const STATE = {
     tahunAjaran: "2026/2027",
     periodeKepengurusan: "2025 - 2027",
     logo: DEFAULT_LOGO,
+    fotoProfil: null,
     sejarah: "Pondok Pesantren Al-Falah didirikan sebagai wadah pendidikan yang memadukan kurikulum SMP formal dengan pembinaan tahfidz Al-Qur'an dan kitab kuning. Berangkat dari niat sederhana untuk mencetak generasi yang hafal Al-Qur'an sekaligus berprestasi secara akademik, pondok terus berkembang dengan fasilitas asrama, ruang kelas, dan program pembinaan yang semakin lengkap dari tahun ke tahun.",
     visi: "Menjadi lembaga pendidikan pesantren tingkat SMP yang unggul dalam mencetak generasi penghafal Al-Qur'an yang berakhlak mulia, berilmu, dan siap menghadapi tantangan zaman.",
     misi: [
@@ -852,6 +853,7 @@ DB.santri.forEach((s,i)=>{
 const SURAT_JUZ30 = ["An-Naba","An-Nazi'at","'Abasa","At-Takwir","Al-Infitar","Al-Muthaffifin","Al-Insyiqaq","Al-Buruj","At-Tariq","Al-A'la"];
 const JENIS_SETORAN = ["Hafalan Baru","Murajaah","Tasmi'","Ulangan Hafalan"];
 const KELANCARAN_OPT = ["Lancar","Cukup","Perlu Diulang"];
+const WIRID_JENIS = ["Tahlil","Wirid","Sholawat Masyisyiah"];
 function pick(arr,i){ return arr[i % arr.length]; }
 
 DB.setoranQuran = [];
@@ -901,6 +903,11 @@ DB.setoranQuran.push(
 DB.setoranSafinah.push(
   { id:uid('SS'), santriId:DB.santri[1].id, santriNama:DB.santri[1].nama, tanggal:todayStr(), bab:3, materi:"Hal yang Membatalkan Wudhu", halaman:"7-9", teks:"Hafalan matan bab 3.", nilai:85, kelancaran:"Lancar", catatan:"Baik, lanjutkan ke bab berikutnya.", penyimak:"Ustzh. Fatimah Az-Zahra", status:"Sudah Setor" }
 );
+
+/* Fitur Setoran Wirid baru ditambahkan pada aplikasi yang sudah berjalan dengan
+   data nyata -- sengaja TIDAK diisi data contoh (demo) supaya tidak tercampur
+   dengan catatan sungguhan yang akan diinput pengurus/ustadz. */
+DB.setoranWirid = [];
 
 DB.absensi = [];
 (function(){
@@ -962,6 +969,7 @@ function collectSyncPayload(){
     kegiatan: DB.kegiatan,
     setoranQuran: DB.setoranQuran,
     setoranSafinah: DB.setoranSafinah,
+    setoranWirid: DB.setoranWirid,
     absensi: DB.absensi,
     pengumuman: DB.pengumuman,
     notifikasi: DB.notifikasi,
@@ -993,6 +1001,7 @@ function applySyncPayload(data){
   if(Array.isArray(data.kegiatan)) DB.kegiatan = data.kegiatan;
   if(Array.isArray(data.setoranQuran)) DB.setoranQuran = data.setoranQuran;
   if(Array.isArray(data.setoranSafinah)) DB.setoranSafinah = data.setoranSafinah;
+  if(Array.isArray(data.setoranWirid)) DB.setoranWirid = data.setoranWirid;
   if(Array.isArray(data.absensi)) DB.absensi = data.absensi;
   if(Array.isArray(data.pengumuman)) DB.pengumuman = data.pengumuman;
   if(Array.isArray(data.notifikasi)) DB.notifikasi = data.notifikasi;
@@ -1119,6 +1128,10 @@ const MENU = [
     { key:"safinah-progres", label:"Progres Safinah" },
     { key:"safinah-rekap", label:"Rekap Safinah", roles:["admin","ustadz"] }
   ]},
+  { key:"setoranWirid", label:"Setoran Wirid", icon:"&#128255;", roles:["admin","ustadz"], children:[
+    { key:"wirid-setoran", label:"Setoran Wirid" },
+    { key:"wirid-rekap", label:"Rekap Wirid" }
+  ]},
   { key:"absensi", label:"Absensi", icon:"&#128203;", roles:["admin","pengurus"], children:[
     { key:"absensi-kegiatan", label:"Absensi Kegiatan" },
     { key:"absensi-rekap", label:"Rekap Absensi" }
@@ -1128,12 +1141,13 @@ const MENU = [
     { key:"laporan-kegiatan", label:"Laporan Kegiatan" },
     { key:"laporan-quran", label:"Laporan Al-Qur'an" },
     { key:"laporan-safinah", label:"Laporan Safinah" },
+    { key:"laporan-wirid", label:"Laporan Wirid" },
     { key:"laporan-absensi", label:"Laporan Absensi" }
   ]},
   { key:"pengumuman", label:"Pengumuman", icon:"&#128276;", roles:["admin","pengurus","ustadz","santri"] },
   { key:"pengaturan", label:"Pengaturan", icon:"&#9881;", roles:["admin"] }
 ];
-const GROUP_KEYS = ["santri","struktur","kegiatan","hafalanQuran","hafalanSafinah","absensi","laporan"];
+const GROUP_KEYS = ["santri","struktur","kegiatan","hafalanQuran","hafalanSafinah","setoranWirid","absensi","laporan"];
 
 function menuAllowed(item){ return !item.roles || item.roles.includes(STATE.currentUser.role); }
 function filteredMenu(){
@@ -1476,7 +1490,7 @@ PUBLIC_VIEWS['beranda'] = {
     </div>
     <section class="pub-section">
       <div class="pub-profil-grid">
-        <div class="pub-profil-visual"><div class="pattern"></div><div class="glyph">&#127963;</div></div>
+        <div class="pub-profil-visual">${s.fotoProfil ? `<img src="${s.fotoProfil}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;">` : `<div class="pattern"></div><div class="glyph">&#127963;</div>`}</div>
         <div>
           <div class="pub-section-head" style="margin-bottom:16px;">
             <div class="eyebrow">Tentang Pondok</div>
@@ -1532,7 +1546,7 @@ PUBLIC_VIEWS['profil-pondok'] = {
           <h3 style="font-size:16px;margin-bottom:10px;">Sejarah Singkat</h3>
           <p style="color:var(--text-secondary);font-size:14.3px;line-height:1.75;">${esc(s.sejarah)}</p>
         </div>
-        <div class="pub-profil-visual"><div class="pattern"></div><div class="glyph">&#127963;</div></div>
+        <div class="pub-profil-visual">${s.fotoProfil ? `<img src="${s.fotoProfil}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;">` : `<div class="pattern"></div><div class="glyph">&#127963;</div>`}</div>
       </div>
     </section>
     <section class="pub-section tight pub-section-alt">
@@ -1900,8 +1914,9 @@ function breadcrumbFor(){
     'kegiatan-kalender':['Kegiatan','Kalender Kegiatan'], 'kegiatan-daftar':['Kegiatan','Daftar Kegiatan'], 'kegiatan-tambah':['Kegiatan','Tambah Kegiatan'],
     'quran-setoran':["Hafalan Al-Qur'an",'Setoran Hafalan'], 'quran-progres':["Hafalan Al-Qur'an",'Progres Hafalan'], 'quran-rekap':["Hafalan Al-Qur'an",'Rekap Hafalan'],
     'safinah-setoran':['Hafalan Safinah','Setoran Safinah'], 'safinah-progres':['Hafalan Safinah','Progres Safinah'], 'safinah-rekap':['Hafalan Safinah','Rekap Safinah'],
+    'wirid-setoran':['Setoran Wirid','Setoran Wirid'], 'wirid-rekap':['Setoran Wirid','Rekap Wirid'],
     'absensi-kegiatan':['Absensi','Absensi Kegiatan'], 'absensi-rekap':['Absensi','Rekap Absensi'],
-    'laporan-santri':['Laporan','Laporan Santri'], 'laporan-kegiatan':['Laporan','Laporan Kegiatan'], 'laporan-quran':['Laporan',"Laporan Al-Qur'an"], 'laporan-safinah':['Laporan','Laporan Safinah'], 'laporan-absensi':['Laporan','Laporan Absensi'],
+    'laporan-santri':['Laporan','Laporan Santri'], 'laporan-kegiatan':['Laporan','Laporan Kegiatan'], 'laporan-quran':['Laporan',"Laporan Al-Qur'an"], 'laporan-safinah':['Laporan','Laporan Safinah'], 'laporan-wirid':['Laporan','Laporan Wirid'], 'laporan-absensi':['Laporan','Laporan Absensi'],
     'pengumuman':['Pengumuman'], 'pengaturan':['Pengaturan']
   };
   return map[STATE.route] || ['Dashboard'];
@@ -2084,9 +2099,10 @@ VIEWS['dashboard'] = {
     const putra = DB.santri.filter(s=>s.jenisKelamin==='L').length;
     const putri = DB.santri.filter(s=>s.jenisKelamin==='P').length;
     const kegiatanHariIni = DB.kegiatan.filter(k=>k.tanggal===todayStr());
-    const setoranHariIni = DB.setoranQuran.filter(s=>s.tanggal===todayStr()).length + DB.setoranSafinah.filter(s=>s.tanggal===todayStr()).length;
+    const setoranHariIni = DB.setoranQuran.filter(s=>s.tanggal===todayStr()).length + DB.setoranSafinah.filter(s=>s.tanggal===todayStr()).length + DB.setoranWirid.filter(s=>s.tanggal===todayStr()).length;
     const totalJuz = DB.setoranQuran.length;
     const totalSafinahSetor = DB.setoranSafinah.length;
+    const totalWiridSetor = DB.setoranWirid.length;
     const hafalanSelesai = DB.santri.reduce((a,s)=>a+s.quranProgress.filter(p=>p.persen>=100).length,0);
     const hafalanBerjalan = DB.santri.reduce((a,s)=>a+s.quranProgress.filter(p=>p.persen>0&&p.persen<100).length,0);
 
@@ -2096,9 +2112,10 @@ VIEWS['dashboard'] = {
       { lbl:'Santri Putri', val:putri, ic:'&#9792;', bg:'var(--gold-soft)', fg:'var(--gold-dark)', delta:`${Math.round(putri/DB.santri.length*100)}% dari total` },
       { lbl:'Total Pengurus', val:DB.pengurus.filter(p=>p.status==='Aktif').length, ic:'&#127963;', bg:'var(--surface-alt)', fg:'var(--text-secondary)', delta:'Periode 2025-2027' },
       { lbl:'Kegiatan Hari Ini', val:kegiatanHariIni.length, ic:'&#128197;', bg:'var(--emerald-50)', fg:'var(--emerald-700)', delta:'Lihat kalender' },
-      { lbl:'Setoran Hafalan Hari Ini', val:setoranHariIni, ic:'&#128172;', bg:'var(--gold-soft)', fg:'var(--gold-dark)', delta:'Qur\'an & Safinah' },
+      { lbl:'Setoran Hafalan Hari Ini', val:setoranHariIni, ic:'&#128172;', bg:'var(--gold-soft)', fg:'var(--gold-dark)', delta:'Qur\'an, Safinah & Wirid' },
       { lbl:'Total Setoran Al-Qur\'an', val:totalJuz, ic:'&#128214;', bg:'#e6f0fb', fg:'var(--info)', delta:'Sepanjang bulan ini' },
-      { lbl:'Total Setoran Safinah', val:totalSafinahSetor, ic:'&#128213;', bg:'var(--surface-alt)', fg:'var(--text-secondary)', delta:'Sepanjang bulan ini' }
+      { lbl:'Total Setoran Safinah', val:totalSafinahSetor, ic:'&#128213;', bg:'var(--surface-alt)', fg:'var(--text-secondary)', delta:'Sepanjang bulan ini' },
+      { lbl:'Total Setoran Wirid', val:totalWiridSetor, ic:'&#128255;', bg:'var(--emerald-50)', fg:'var(--emerald-700)', delta:'Sepanjang bulan ini' }
     ];
 
     const kegList = kegiatanHariIni.length ? kegiatanHariIni.map(k=>`
@@ -3099,6 +3116,73 @@ VIEWS['safinah-rekap'] = {
 };
 
 /* ============================================================
+   VIEW: SETORAN WIRID
+   ============================================================ */
+function setoranWiridForm(existing){
+  const w = existing || {};
+  const santriOpts = DB.santri.map(s=>`<option value="${s.id}" ${w.santriId===s.id?'selected':''}>${esc(s.nama)}</option>`).join('');
+  return `<div class="form-grid">
+    <div class="field full"><label>Nama Santri</label><select class="input" id="fw_santri">${santriOpts}</select></div>
+    <div class="field"><label>Tanggal Setoran</label><input type="date" class="input" id="fw_tanggal" value="${w.tanggal||todayStr()}"></div>
+    <div class="field"><label>Jenis Wirid</label><select class="input" id="fw_jenis">${WIRID_JENIS.map(j=>`<option ${w.jenis===j?'selected':''}>${j}</option>`).join('')}</select></div>
+    <div class="field"><label>Nilai (0-100)</label><input type="number" min="0" max="100" class="input" id="fw_nilai" value="${w.nilai||80}"></div>
+    <div class="field"><label>Kelancaran</label><select class="input" id="fw_kelancaran">${KELANCARAN_OPT.map(k=>`<option ${w.kelancaran===k?'selected':''}>${k}</option>`).join('')}</select></div>
+    <div class="field"><label>Nama Penyimak</label><input class="input" id="fw_penyimak" value="${esc(w.penyimak||STATE.currentUser.nama)}"></div>
+    <div class="field full"><label>Catatan Ustadz/Ustadzah</label><textarea class="input" id="fw_catatan" rows="2">${esc(w.catatan||'')}</textarea></div>
+  </div>`;
+}
+function openSetoranWiridModal(id){
+  const existing = id ? DB.setoranWirid.find(x=>x.id===id) : null;
+  openModal(`<div class="modal-head"><h3>${existing?'Edit Setoran Wirid':'Tambah Setoran Wirid'}</h3><button class="btn-icon" data-close-modal>&times;</button></div>
+    <div class="modal-body">${setoranWiridForm(existing)}</div>
+    <div class="modal-foot"><button class="btn btn-outline" data-close-modal>Batal</button><button class="btn btn-primary" id="saveWBtn">Simpan Setoran</button></div>`, {wide:true});
+  document.getElementById('saveWBtn').addEventListener('click', ()=>{
+    const g=id=>document.getElementById(id).value;
+    const santri = DB.santri.find(s=>s.id===g('fw_santri'));
+    const data = { santriId:santri.id, santriNama:santri.nama, tanggal:g('fw_tanggal'), jenis:g('fw_jenis'), nilai:parseInt(g('fw_nilai')), kelancaran:g('fw_kelancaran'), penyimak:g('fw_penyimak'), catatan:g('fw_catatan') };
+    if(existing){ Object.assign(existing,data); toast('Setoran wirid diperbarui.'); }
+    else {
+      DB.setoranWirid.push({ id:uid('SW'), ...data });
+      toast('Setoran wirid berhasil dicatat.');
+    }
+    closeModal(); navigate('wirid-setoran');
+  });
+}
+
+VIEWS['wirid-setoran'] = {
+  render(){
+    const canEdit = ['admin','ustadz'].includes(STATE.currentUser.role);
+    const list = [...DB.setoranWirid].reverse();
+    return `${pageHead('Setoran Wirid', `${list.length} catatan setoran`, canEdit?`<button class="btn btn-primary" id="addWBtn">+ Tambah Setoran</button>`:'')}
+    <div class="table-wrap">
+      <table><thead><tr><th>Santri</th><th>Tanggal</th><th>Jenis Wirid</th><th>Nilai</th><th>Kelancaran</th><th>Penyimak</th><th class="no-print">Aksi</th></tr></thead>
+      <tbody>${list.length ? list.map(w=>`<tr><td><b>${esc(w.santriNama)}</b></td><td>${fmtDateShort(w.tanggal)}</td><td>${esc(w.jenis)}</td><td>${w.nilai}</td><td>${kelancaranPill(w.kelancaran)}</td><td>${esc(w.penyimak)}</td>
+      <td class="no-print"><div class="td-actions">${canEdit?`<button class="btn-icon" data-editw="${w.id}">&#9998;</button><button class="btn-icon" data-delw="${w.id}">&#128465;</button>`:'-'}</div></td></tr>`).join('') : `<tr><td colspan="7"><div class="empty-state" style="padding:24px;"><div class="ic">&#128255;</div>Belum ada catatan setoran wirid.</div></td></tr>`}</tbody></table>
+    </div>`;
+  },
+  bind(){
+    const addBtn=document.getElementById('addWBtn'); if(addBtn) addBtn.addEventListener('click',()=>openSetoranWiridModal(null));
+    on('[data-editw]','click', e=>openSetoranWiridModal(e.currentTarget.dataset.editw));
+    on('[data-delw]','click', e=>{ const id=e.currentTarget.dataset.delw; confirmDelete('Catatan setoran ini akan dihapus.', ()=>{ DB.setoranWirid=DB.setoranWirid.filter(x=>x.id!==id); toast('Catatan setoran dihapus.'); navigate('wirid-setoran'); }); });
+  }
+};
+
+VIEWS['wirid-rekap'] = {
+  render(){
+    const totalSetoran = DB.setoranWirid.length;
+    const rataNilai = Math.round(DB.setoranWirid.reduce((a,x)=>a+x.nilai,0)/(totalSetoran||1));
+    const byJenis = WIRID_JENIS.map((j,i)=>({label:j, value: DB.setoranWirid.filter(x=>x.jenis===j).length, color: ['var(--emerald-700)','var(--gold-dark)','var(--info)'][i%3]}));
+    return `${pageHead('Rekap Setoran Wirid', 'Ringkasan seluruh catatan setoran', `<button class="btn btn-outline" id="rkWExcel">&#11015; Export Excel</button>`)}
+    <div class="stat-grid" style="grid-template-columns:repeat(2,1fr);">
+      <div class="stat-card"><div class="val">${totalSetoran}</div><div class="lbl">Total Setoran</div></div>
+      <div class="stat-card"><div class="val">${rataNilai}</div><div class="lbl">Rata-rata Nilai</div></div>
+    </div>
+    <div class="card card-pad"><div class="section-title" style="margin-bottom:12px;">Distribusi per Jenis Wirid</div>${svgBarChart(byJenis,{max:Math.max(...byJenis.map(b=>b.value),5)})}</div>`;
+  },
+  bind(){ const b=document.getElementById('rkWExcel'); if(b) b.addEventListener('click', ()=>exportRowsToExcel('Rekap-Setoran-Wirid.xlsx', ['Santri','Tanggal','Jenis','Nilai','Kelancaran','Penyimak'], DB.setoranWirid.map(x=>[x.santriNama,x.tanggal,x.jenis,x.nilai,x.kelancaran,x.penyimak]))); }
+};
+
+/* ============================================================
    VIEW: ABSENSI
    ============================================================ */
 const absensiUIState = { kegiatanId: DB.kegiatan[1].id, filterTgl:'', filterKelas:'', filterKeg:'' };
@@ -3264,6 +3348,19 @@ VIEWS['laporan-safinah'] = {
     );
   }
 };
+VIEWS['laporan-wirid'] = {
+  render(){
+    return reportShell('Laporan Setoran Wirid', `Rekap setoran wirid seluruh santri (${DB.setoranWirid.length} catatan)`,
+      `<table><thead><tr><th>Santri</th><th>Tanggal</th><th>Jenis</th><th>Nilai</th><th>Kelancaran</th><th>Penyimak</th></tr></thead>
+      <tbody>${DB.setoranWirid.map(w=>`<tr><td>${esc(w.santriNama)}</td><td>${fmtDateShort(w.tanggal)}</td><td>${esc(w.jenis)}</td><td>${w.nilai}</td><td>${esc(w.kelancaran)}</td><td>${esc(w.penyimak)}</td></tr>`).join('')}</tbody></table>`);
+  },
+  bind(){
+    bindReportButtons(
+      ()=>exportRowsToExcel('Laporan-Setoran-Wirid.xlsx', ['Santri','Tanggal','Jenis','Nilai','Kelancaran','Penyimak'], DB.setoranWirid.map(w=>[w.santriNama,w.tanggal,w.jenis,w.nilai,w.kelancaran,w.penyimak])),
+      ()=>{ const rows = DB.setoranWirid.map(w=>`<tr><td>${esc(w.santriNama)}</td><td>${fmtDateShort(w.tanggal)}</td><td>${esc(w.jenis)}</td><td>${w.nilai}</td><td>${esc(w.kelancaran)}</td><td>${esc(w.penyimak)}</td></tr>`).join(''); doPrint(`<div class="print-table"><table><thead><tr><th>Santri</th><th>Tanggal</th><th>Jenis</th><th>Nilai</th><th>Kelancaran</th><th>Penyimak</th></tr></thead><tbody>${rows}</tbody></table></div>`, 'Laporan Setoran Wirid'); }
+    );
+  }
+};
 VIEWS['laporan-absensi'] = {
   render(){
     const pct = Math.round(DB.absensi.filter(a=>a.status==='Hadir').length/DB.absensi.length*100);
@@ -3374,6 +3471,20 @@ VIEWS['pengaturan'] = {
       <div class="card card-pad">
         <div class="section-title" style="margin-bottom:6px;">Profil Pondok (Tampil di Situs Publik)</div>
         <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">Isi bagian ini digunakan pada halaman publik "Beranda" (Tentang Pondok) dan "Profil Pondok" — Sejarah, Visi, Misi, dan Nilai-nilai Pondok.</p>
+        <div class="field full" style="margin-bottom:16px;">
+          <label>Foto Profil Pondok</label>
+          <p style="font-size:12px;color:var(--text-muted);margin:2px 0 10px;">Foto ini tampil di halaman publik "Beranda" dan "Profil Pondok", menggantikan ikon bawaan.</p>
+          <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+            <div style="width:160px;aspect-ratio:4/3;border-radius:12px;background:var(--surface-alt);display:flex;align-items:center;justify-content:center;overflow:hidden;border:1px solid var(--border);flex:none;">
+              ${s.fotoProfil ? `<img id="profilFotoPreview" src="${s.fotoProfil}" style="width:100%;height:100%;object-fit:cover;">` : `<span style="font-size:32px;color:var(--text-muted);">&#127963;</span>`}
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <input type="file" id="profilFotoUpload" accept="image/*" class="hidden">
+              <button type="button" class="btn btn-outline btn-sm" id="profilFotoUploadBtn">&#128193; ${s.fotoProfil?'Ganti Foto':'Unggah Foto'}</button>
+              ${s.fotoProfil?`<button type="button" class="btn btn-outline btn-sm" id="profilFotoRemoveBtn">&times; Hapus Foto</button>`:''}
+            </div>
+          </div>
+        </div>
         <div class="form-grid">
           <div class="field full"><label>Sejarah Pondok</label><textarea class="input" id="st_sejarah" rows="5" style="resize:vertical;">${esc(s.sejarah)}</textarea></div>
           <div class="field full"><label>Visi</label><textarea class="input" id="st_visi" rows="3" style="resize:vertical;">${esc(s.visi)}</textarea></div>
@@ -3458,6 +3569,28 @@ VIEWS['pengaturan'] = {
       STATE.pengaturanTab = tab;
       $all('.tab-panel').forEach(p=>p.classList.add('hidden'));
       document.getElementById('tab'+tab.charAt(0).toUpperCase()+tab.slice(1)).classList.remove('hidden');
+    });
+    const profilFotoBtn = document.getElementById('profilFotoUploadBtn'); const profilFotoInput = document.getElementById('profilFotoUpload');
+    if(profilFotoBtn) profilFotoBtn.addEventListener('click', ()=>profilFotoInput.click());
+    if(profilFotoInput) profilFotoInput.addEventListener('change', e=>{
+      const file = e.target.files[0]; if(!file) return;
+      if(!file.type.startsWith('image/')){ toast('Berkas harus berupa gambar (PNG/JPG).', 'err'); return; }
+      resizeImageToDataUrl(file, 900).then(dataUrl=>{
+        STATE.settings.fotoProfil = dataUrl;
+        toast('Foto profil pondok berhasil diperbarui.');
+        STATE.pengaturanTab = 'profil';
+        render();
+      }).catch(err=>{
+        console.warn('Gagal memproses foto profil:', err);
+        toast('Gagal memproses gambar. Coba gambar lain.', 'err');
+      });
+    });
+    const profilFotoRemoveBtn = document.getElementById('profilFotoRemoveBtn');
+    if(profilFotoRemoveBtn) profilFotoRemoveBtn.addEventListener('click', ()=>{
+      STATE.settings.fotoProfil = null;
+      toast('Foto profil pondok dihapus.');
+      STATE.pengaturanTab = 'profil';
+      render();
     });
     const addMisiBtn = document.getElementById('addMisiBtn');
     if(addMisiBtn) addMisiBtn.addEventListener('click', ()=>{
