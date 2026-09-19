@@ -621,7 +621,7 @@ const STATE = {
   openDropdown: null,
   pengaturanTab: "identitas",
   searchQuery: "",
-  navOpenGroups: { santri:true, hafalanQuran:false, hafalanSafinah:false, kegiatan:false, absensi:false, laporan:false, struktur:false },
+  navOpenGroups: { santri:true, hafalanQuran:false, hafalanSafinah:false, setoranWirid:false, kegiatan:false, absensi:false, laporan:false, struktur:false },
   calMonth: new Date(2026,8,1),
   pubMobileNavOpen: false,
   pubSearchOpen: false,
@@ -1118,17 +1118,17 @@ const MENU = [
     { key:"kegiatan-daftar", label:"Daftar Kegiatan" },
     { key:"kegiatan-tambah", label:"Tambah Kegiatan", roles:["admin","pengurus"] }
   ]},
-  { key:"hafalanQuran", label:"Hafalan Al-Qur'an", icon:"&#128214;", roles:["admin","ustadz","santri"], children:[
-    { key:"quran-setoran", label:"Setoran Hafalan", roles:["admin","ustadz"] },
+  { key:"hafalanQuran", label:"Hafalan Al-Qur'an", icon:"&#128214;", roles:["admin","pengurus","ustadz","santri"], children:[
+    { key:"quran-setoran", label:"Setoran Hafalan", roles:["admin","ustadz","pengurus"] },
     { key:"quran-progres", label:"Progres Hafalan" },
-    { key:"quran-rekap", label:"Rekap Hafalan", roles:["admin","ustadz"] }
+    { key:"quran-rekap", label:"Rekap Hafalan", roles:["admin","ustadz","pengurus"] }
   ]},
-  { key:"hafalanSafinah", label:"Hafalan Safinah", icon:"&#128213;", roles:["admin","ustadz","santri"], children:[
-    { key:"safinah-setoran", label:"Setoran Safinah", roles:["admin","ustadz"] },
+  { key:"hafalanSafinah", label:"Hafalan Safinah", icon:"&#128213;", roles:["admin","pengurus","ustadz","santri"], children:[
+    { key:"safinah-setoran", label:"Setoran Safinah", roles:["admin","ustadz","pengurus"] },
     { key:"safinah-progres", label:"Progres Safinah" },
-    { key:"safinah-rekap", label:"Rekap Safinah", roles:["admin","ustadz"] }
+    { key:"safinah-rekap", label:"Rekap Safinah", roles:["admin","ustadz","pengurus"] }
   ]},
-  { key:"setoranWirid", label:"Setoran Wirid", icon:"&#128255;", roles:["admin","ustadz"], children:[
+  { key:"setoranWirid", label:"Setoran Wirid", icon:"&#128255;", roles:["admin","pengurus","ustadz"], children:[
     { key:"wirid-setoran", label:"Setoran Wirid" },
     { key:"wirid-rekap", label:"Rekap Wirid" }
   ]},
@@ -2301,8 +2301,13 @@ function openSantriModal(editId){
       Object.assign(existing, data);
       toast('Data santri berhasil diperbarui.');
     } else {
-      const id = "S"+String(DB.santri.length+1).padStart(3,'0');
-      const newS = { id, ...data, quranProgress: seedProgress(DB.santri.length*5+3,30,20), safinahBab: [...SAFINAH_BAB_DEFAULT], safinahProgress: seedProgress(DB.santri.length*3+2,SAFINAH_BAB_DEFAULT.length,15), foto:null };
+      // ID dihitung dari nomor tertinggi yang sudah ada (bukan dari panjang array) supaya
+      // tidak bentrok dengan santri lain jika sebelumnya pernah ada data yang dihapus.
+      const maxNum = DB.santri.reduce((max,s)=>{ const m = /^S(\d+)$/.exec(s.id); return m ? Math.max(max, parseInt(m[1],10)) : max; }, 0);
+      const id = "S"+String(maxNum+1).padStart(3,'0');
+      // Santri baru mulai dari progres hafalan 0% -- BUKAN data contoh acak -- karena ini
+      // aplikasi produksi dengan data sungguhan; progres akan naik seiring setoran nyata dicatat.
+      const newS = { id, ...data, quranProgress: Array.from({length:30},(_,i)=>({n:i+1, persen:0})), safinahBab: [...SAFINAH_BAB_DEFAULT], safinahProgress: SAFINAH_BAB_DEFAULT.map((_,i)=>({n:i+1, persen:0})), foto:null };
       DB.santri.push(newS);
       toast('Santri baru berhasil ditambahkan.');
     }
@@ -3025,7 +3030,7 @@ VIEWS['quran-rekap'] = {
 function setoranSafinahForm(existing){
   const q = existing || {};
   const santriOpts = DB.santri.map(s=>`<option value="${s.id}" ${q.santriId===s.id?'selected':''}>${esc(s.nama)}</option>`).join('');
-  const babOpts = DB.santri[0].safinahBab.map((b,i)=>`<option value="${i+1}" ${q.bab===i+1?'selected':''}>${esc(b)}</option>`).join('');
+  const babOpts = SAFINAH_BAB_DEFAULT.map((b,i)=>`<option value="${i+1}" ${q.bab===i+1?'selected':''}>${esc(b)}</option>`).join('');
   return `<div class="form-grid">
     <div class="field full"><label>Nama Santri</label><select class="input" id="fs_santri">${santriOpts}</select></div>
     <div class="field"><label>Tanggal Setoran</label><input type="date" class="input" id="fs_tanggal" value="${q.tanggal||todayStr()}"></div>
@@ -3199,6 +3204,13 @@ function getAbsensiForKegiatan(kid){
 
 VIEWS['absensi-kegiatan'] = {
   render(){
+    // Pastikan kegiatan yang terpilih masih benar-benar ada di data terbaru (bisa saja
+    // sudah dihapus/diganti admin, atau ini pemuatan pertama sebelum data server masuk).
+    if(!DB.kegiatan.some(x=>x.id===absensiUIState.kegiatanId)) absensiUIState.kegiatanId = DB.kegiatan[0] ? DB.kegiatan[0].id : null;
+    if(!absensiUIState.kegiatanId){
+      return `${pageHead('Absensi Kegiatan', 'Catat kehadiran santri per kegiatan')}
+      <div class="card card-pad"><div class="empty-state" style="padding:32px;"><div class="ic">&#128203;</div>Belum ada kegiatan yang bisa diabsen. Tambahkan kegiatan terlebih dahulu di menu Kegiatan.</div></div>`;
+    }
     const k = DB.kegiatan.find(x=>x.id===absensiUIState.kegiatanId);
     const records = getAbsensiForKegiatan(absensiUIState.kegiatanId);
     const hadir = records.filter(r=>r.status==='Hadir').length;
@@ -3231,7 +3243,9 @@ VIEWS['absensi-kegiatan'] = {
     </div>`;
   },
   bind(){
-    document.getElementById('absKegSelect').addEventListener('change', e=>{ absensiUIState.kegiatanId=e.target.value; rerenderContentOnly(); });
+    const absKegSelect = document.getElementById('absKegSelect');
+    if(!absKegSelect) return; // tidak ada kegiatan sama sekali -- tampilan empty-state, tidak ada elemen untuk di-bind
+    absKegSelect.addEventListener('change', e=>{ absensiUIState.kegiatanId=e.target.value; rerenderContentOnly(); });
     on('[data-absstatus]','change', e=>{ const id=e.currentTarget.dataset.absstatus; const rec=DB.absensi.find(x=>x.id===id); rec.status=e.target.value; });
     document.getElementById('saveAbsensiBtn').addEventListener('click', ()=>toast('Absensi kegiatan berhasil disimpan.'));
     document.getElementById('printAbsensiBtn').addEventListener('click', ()=>{
@@ -3416,11 +3430,21 @@ VIEWS['pengumuman'] = {
    ============================================================ */
 VIEWS['profil-saya'] = {
   render(){
-    const s = DB.santri.find(x=>x.id===STATE.currentUser.santriId) || DB.santri[1];
+    // PENTING: jangan pernah "jatuh" ke santri lain jika data tidak ditemukan --
+    // itu berarti menampilkan data pribadi santri yang salah ke akun yang salah.
+    const s = DB.santri.find(x=>x.id===STATE.currentUser.santriId);
+    if(!s){
+      return `${pageHead('Profil Saya', 'Data santri tidak ditemukan')}
+      <div class="card card-pad"><div class="empty-state" style="padding:32px;"><div class="ic">&#128100;</div>Data profil untuk akun ini belum terhubung dengan data santri manapun. Silakan hubungi admin pondok.</div></div>`;
+    }
     STATE.routeParams = { id: s.id };
     return VIEWS['santri-detail'].render();
   },
-  bind(){ VIEWS['santri-detail'].bind(); }
+  bind(){
+    const s = DB.santri.find(x=>x.id===STATE.currentUser.santriId);
+    if(!s) return;
+    VIEWS['santri-detail'].bind();
+  }
 };
 
 /* ============================================================
