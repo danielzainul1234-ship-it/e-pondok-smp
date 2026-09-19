@@ -970,6 +970,21 @@ function collectSyncPayload(){
   };
 }
 
+/* Data lama (sebelum daftar Bab Safinah diperbarui) menyimpan safinahBab versi lama
+   pada tiap santri. Samakan ke daftar Bab terbaru supaya label & jumlah bab konsisten
+   di semua perangkat. Progres per-bab lama tidak bisa dipetakan 1:1 ke daftar baru
+   (isinya benar-benar berbeda), jadi progresnya direset ke 0% -- riwayat setoran yang
+   sudah tercatat di menu Setoran Safinah TETAP AMAN dan tidak diubah/dihapus. */
+function normalizeSafinahBab(){
+  const canonical = JSON.stringify(SAFINAH_BAB_DEFAULT);
+  DB.santri.forEach(s=>{
+    if(!Array.isArray(s.safinahBab) || JSON.stringify(s.safinahBab) !== canonical){
+      s.safinahBab = [...SAFINAH_BAB_DEFAULT];
+      s.safinahProgress = SAFINAH_BAB_DEFAULT.map((_,i)=>({n:i+1, persen:0}));
+    }
+  });
+}
+
 function applySyncPayload(data){
   if(!data || typeof data !== 'object') return;
   if(data.settings && typeof data.settings === 'object') Object.assign(STATE.settings, data.settings);
@@ -983,6 +998,7 @@ function applySyncPayload(data){
   if(Array.isArray(data.notifikasi)) DB.notifikasi = data.notifikasi;
   if(Array.isArray(data.kelasList)) DB.kelasList = data.kelasList;
   if(Array.isArray(data.kamarList)) DB.kamarList = data.kamarList;
+  normalizeSafinahBab();
 }
 
 function saveToStorage(){
