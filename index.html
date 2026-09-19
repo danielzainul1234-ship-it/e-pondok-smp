@@ -1239,7 +1239,7 @@ function renderLogin(){
       </div>
       <div class="login-hero">
         <h2>Mengelola pondok pesantren, kini lebih rapi &amp; terpadu.</h2>
-        <p>Satu sistem untuk data santri, hafalan Al-Qur'an &amp; Safinah, kegiatan, absensi, hingga laporan — dapat diakses kapan saja, dari perangkat apa saja.</p>
+        <p>Satu sistem untuk data santri, hafalan Al-Qur'an, Safinah &amp; Setoran Wirid, kegiatan, absensi, hingga laporan — dapat diakses kapan saja, dari perangkat apa saja.</p>
       </div>
       <div class="login-stats">
         <div><b>${DB.santri.length}</b><span>Santri Aktif</span></div>
@@ -1467,7 +1467,7 @@ PUBLIC_VIEWS['beranda'] = {
     const totalSantri = DB.santri.filter(x=>x.statusSantri==='Aktif').length;
     const totalPengurus = DB.pengurus.filter(p=>p.status==='Aktif').length;
     const totalKegiatan = DB.kegiatan.length;
-    const programHafalan = 2;
+    const programHafalan = 3;
     return `
     <section class="pub-hero">
       <div class="pattern"></div>
@@ -1475,7 +1475,7 @@ PUBLIC_VIEWS['beranda'] = {
         <div>
           <div class="pub-eyebrow">${esc(s.namaPondok)}</div>
           <h1>SELAMAT DATANG DI<br>${esc(s.namaAplikasi)}</h1>
-          <p class="lead">${esc(s.subjudul)} — satu sistem terpadu untuk data santri, struktur pengurus, kegiatan, hafalan Al-Qur'an &amp; Safinah, hingga informasi pondok.</p>
+          <p class="lead">${esc(s.subjudul)} — satu sistem terpadu untuk data santri, struktur pengurus, kegiatan, hafalan Al-Qur'an, Safinah &amp; Setoran Wirid, hingga informasi pondok.</p>
           <div class="pub-hero-actions">
             <button class="btn btn-gold" data-nav="kegiatan-publik">Lihat Kegiatan</button>
             <button class="btn btn-outline" data-nav="login" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.35);color:#fff;">Login Pengurus &#8594;</button>
@@ -1513,7 +1513,7 @@ PUBLIC_VIEWS['beranda'] = {
       <div class="pub-card-grid">
         <div class="pub-info-card" data-nav="struktur-publik"><div class="kicker"><span style="font-size:22px;">&#127963;</span></div><h4>Struktur Pengurus</h4><p>Susunan pengasuh, kepala pondok, dan pengurus santri periode berjalan.</p></div>
         <div class="pub-info-card" data-nav="kegiatan-publik"><div class="kicker"><span style="font-size:22px;">&#128197;</span></div><h4>Kegiatan Pondok</h4><p>Jadwal kegiatan harian dan mingguan — tahfidz, kajian, hingga kegiatan khusus.</p></div>
-        <div class="pub-info-card" data-nav="hafalan-publik"><div class="kicker"><span style="font-size:22px;">&#128214;</span></div><h4>Program Hafalan</h4><p>Gambaran umum capaian hafalan Al-Qur'an dan Safinah seluruh santri.</p></div>
+        <div class="pub-info-card" data-nav="hafalan-publik"><div class="kicker"><span style="font-size:22px;">&#128214;</span></div><h4>Program Hafalan</h4><p>Gambaran umum capaian hafalan Al-Qur'an, Safinah, dan Setoran Wirid seluruh santri.</p></div>
         <div class="pub-info-card" data-nav="santri-publik"><div class="kicker"><span style="font-size:22px;">&#128101;</span></div><h4>Data Santri</h4><p>Statistik jumlah santri berdasarkan kelas, kamar, dan jenis kelamin.</p></div>
         <div class="pub-info-card" data-nav="informasi-publik"><div class="kicker"><span style="font-size:22px;">&#128276;</span></div><h4>Informasi &amp; Pengumuman</h4><p>Pengumuman resmi dan berita terbaru dari pondok.</p></div>
         <div class="pub-info-card" data-nav="login"><div class="kicker"><span style="font-size:22px;">&#128274;</span></div><h4>Login Sistem</h4><p>Masuk sesuai peran: Admin, Pengurus, Ustadz/Ustadzah, atau Santri.</p></div>
@@ -1738,16 +1738,20 @@ PUBLIC_VIEWS['hafalan-publik'] = {
       babAvg.push({n:b+1, persen: Math.round(vals.reduce((a,c)=>a+c,0)/vals.length)});
     }
     const overallSafinah = Math.round(babAvg.reduce((a,b)=>a+b.persen,0)/babCount);
+    const totalWirid = DB.setoranWirid.length;
+    const rataNilaiWirid = Math.round(DB.setoranWirid.reduce((a,x)=>a+x.nilai,0)/(totalWirid||1));
+    const wiridByJenis = WIRID_JENIS.map((j,i)=>({label:j, value: DB.setoranWirid.filter(x=>x.jenis===j).length, color: ['var(--emerald-700)','var(--gold-dark)','var(--info)'][i%3]}));
     return `
     <section class="pub-section tight">
       <div class="pub-section-head">
         <div class="eyebrow">Hafalan</div>
-        <h2>Program Hafalan Al-Qur'an &amp; Safinah</h2>
-        <p>Gambaran umum capaian hafalan seluruh santri. Detail hafalan per santri hanya dapat dilihat setelah login.</p>
+        <h2>Program Hafalan Al-Qur'an, Safinah &amp; Setoran Wirid</h2>
+        <p>Gambaran umum capaian hafalan dan setoran wirid seluruh santri. Detail per santri hanya dapat dilihat setelah login.</p>
       </div>
-      <div class="stat-grid" style="grid-template-columns:repeat(2,1fr);">
+      <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);">
         <div class="stat-card"><div class="top"><div class="stat-ic" style="background:var(--emerald-50);color:var(--emerald-700);">&#128214;</div></div><div class="val">${overallQuran}%</div><div class="lbl">Rata-rata Capaian Al-Qur'an (30 Juz)</div></div>
         <div class="stat-card"><div class="top"><div class="stat-ic" style="background:var(--gold-soft);color:var(--gold-dark);">&#128213;</div></div><div class="val">${overallSafinah}%</div><div class="lbl">Rata-rata Capaian Safinah (${babCount} Bab)</div></div>
+        <div class="stat-card"><div class="top"><div class="stat-ic" style="background:var(--info-soft, #e6f0fb);color:var(--info,#2563eb);">&#128220;</div></div><div class="val">${totalWirid}</div><div class="lbl">Total Setoran Wirid (Rata-rata Nilai ${rataNilaiWirid})</div></div>
       </div>
       <div class="grid-2">
         <div class="card card-pad">
@@ -1761,9 +1765,13 @@ PUBLIC_VIEWS['hafalan-publik'] = {
           </div>
         </div>
       </div>
+      <div class="card card-pad">
+        <div class="section-title" style="margin-bottom:14px;">Distribusi Setoran Wirid per Jenis</div>
+        ${totalWirid ? svgBarChart(wiridByJenis,{max:Math.max(...wiridByJenis.map(b=>b.value),5)}) : `<div class="empty-state" style="padding:20px;">Belum ada catatan setoran wirid.</div>`}
+      </div>
       <div class="pub-notice">
         <div class="ic">&#128274;</div>
-        <div class="t"><b>Ingin melihat progres hafalan putra/putri Anda?</b> <span data-nav="login" style="text-decoration:underline;cursor:pointer;">Login</span> menggunakan akun Ustadz/Ustadzah atau Santri untuk mengakses detail per santri.</div>
+        <div class="t"><b>Ingin melihat progres hafalan &amp; wirid putra/putri Anda?</b> <span data-nav="login" style="text-decoration:underline;cursor:pointer;">Login</span> menggunakan akun Ustadz/Ustadzah atau Santri untuk mengakses detail per santri.</div>
       </div>
     </section>`;
   },
