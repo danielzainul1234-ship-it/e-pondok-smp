@@ -1168,12 +1168,6 @@ function renderLogin(){
           </div>
           <button type="submit" class="btn btn-primary btn-block">Masuk &#8594;</button>
         </form>
-        <div class="demo-accounts">
-          <div class="demo-label">Akun Demo — Klik untuk isi otomatis</div>
-          <div class="demo-grid">
-            ${USERS.map(u=>`<button class="demo-chip" data-u="${u.username}" data-p="${u.password}"><b>${ROLE_LABEL[u.role]}</b><span>${u.username} / ${u.password}</span></button>`).join('')}
-          </div>
-        </div>
       </div>
     </div>
   </div>`;
@@ -1187,7 +1181,7 @@ function bindLogin(){
     const u = document.getElementById('loginUsername').value.trim();
     const p = document.getElementById('loginPassword').value;
     if(!doLogin(u,p)){
-      errBox.innerHTML = `<div class="login-error">Username atau kata sandi salah. Silakan coba lagi atau gunakan akun demo di bawah.</div>`;
+      errBox.innerHTML = `<div class="login-error">Username atau kata sandi salah. Silakan coba lagi.</div>`;
     } else {
       toast('Berhasil masuk. Selamat datang kembali!');
     }
@@ -1200,11 +1194,6 @@ function bindLogin(){
     toast('Tautan reset kata sandi telah dikirim ke email terdaftar (simulasi).');
   });
   document.getElementById('backToBerandaBtn').addEventListener('click', ()=>navigate('beranda'));
-  on('.demo-chip','click', e=>{
-    const btn = e.currentTarget;
-    document.getElementById('loginUsername').value = btn.dataset.u;
-    document.getElementById('loginPassword').value = btn.dataset.p;
-  });
 }
 
 /* ============================================================
