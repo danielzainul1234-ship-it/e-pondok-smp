@@ -1,3 +1,10 @@
+<!DOCTYPE html>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+<meta name="theme-color" content="#0f2942">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>E-Pondok SMP</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -51,7 +58,9 @@
   --shadow-md:0 8px 24px -4px rgba(0,0,0,.45);
   --shadow-lg:0 20px 48px -12px rgba(0,0,0,.6);
 }
-*{box-sizing:border-box;}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%;}
+html,body{max-width:100%;overflow-x:hidden;}
 body{background:var(--bg);color:var(--text-primary);font-family:var(--font);-webkit-font-smoothing:antialiased;}
 h1,h2,h3,h4{font-weight:700;text-wrap:balance;margin:0;}
 p{margin:0;}
@@ -152,7 +161,7 @@ img{max-width:100%;}
 #main{margin-left:var(--sidebar-w);flex:1;min-width:0;display:flex;flex-direction:column;min-height:100vh;}
 #topbar{position:sticky;top:0;z-index:30;background:var(--surface);border-bottom:1px solid var(--border);padding:12px 26px;display:flex;align-items:center;gap:16px;}
 #menuToggle{display:none;}
-.search-wrap{flex:1;max-width:420px;position:relative;}
+.search-wrap{flex:1;min-width:0;max-width:420px;position:relative;}
 .search-wrap input{width:100%;padding:10px 14px 10px 38px;border-radius:12px;border:1.5px solid var(--border);background:var(--surface-alt);font-size:13.5px;color:var(--text-primary);}
 .search-wrap input:focus{outline:none;border-color:var(--emerald-500);background:var(--surface);}
 .search-wrap .sic{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--text-muted);}
@@ -231,6 +240,7 @@ tbody tr:hover{background:var(--surface-alt);}
 /* Progress */
 .progress-row{display:flex;align-items:center;gap:12px;margin-bottom:11px;}
 .progress-row .lbl{width:82px;flex-shrink:0;font-size:12px;font-weight:700;color:var(--text-secondary);}
+.progress-row .lbl.lbl-wide{width:200px;}
 .progress-track{flex:1;height:9px;border-radius:20px;background:var(--surface-alt);overflow:hidden;}
 .progress-fill{height:100%;border-radius:20px;background:linear-gradient(90deg,var(--emerald-500),var(--emerald-700));}
 .progress-fill.gold{background:linear-gradient(90deg,var(--gold),var(--gold-dark));}
@@ -338,12 +348,14 @@ tbody tr:hover{background:var(--surface-alt);}
   #sidebar{transform:translateX(-100%);box-shadow:var(--shadow-lg);}
   #sidebar.open{transform:translateX(0);}
   #main{margin-left:0;}
-  #menuToggle{display:flex;}
+  #menuToggle{display:flex;flex-shrink:0;}
   .search-wrap{max-width:none;}
   .stat-grid{grid-template-columns:1fr 1fr;}
   #content{padding:16px;}
   .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:39;}
   .sidebar-overlay.show{display:block;}
+  #topbar{padding:10px 14px;gap:10px;}
+  .bell-wrap, .profile-btn{flex-shrink:0;}
 }
 @media (max-width:560px){
   .login-visual{display:none;}
@@ -351,6 +363,56 @@ tbody tr:hover{background:var(--surface-alt);}
   .demo-grid{grid-template-columns:1fr;}
   .page-head{flex-direction:column;}
   .kartu-santri{width:100%;}
+}
+
+/* ===== Mobile-friendly enhancements ===== */
+@media (max-width:640px){
+  /* Prevent iOS Safari auto-zoom on focus (inputs need >=16px font-size) */
+  .input, select.input, textarea.input, .search-wrap input{font-size:16px;}
+  .select-filter{font-size:14px;}
+  /* Touch targets */
+  .btn-icon{width:40px;height:40px;}
+  .btn{min-height:42px;}
+  .btn-sm{min-height:36px;}
+  /* Topbar: hide name/role text, keep avatar + chevron to save space */
+  .pb-info{display:none;}
+  .profile-btn{padding:5px;}
+  /* Dropdown panels (notifikasi/profil) are anchored to a small icon inside the
+     topbar, not the screen edge — on a narrow phone that puts a 340px panel
+     partly off-screen. Pin them to the viewport instead so they always fit. */
+  .dropdown-panel{position:fixed!important;top:60px;left:12px;right:12px;width:auto;max-width:none;}
+  #profilePanel{left:auto!important;width:min(220px, calc(100vw - 24px))!important;}
+  /* Modal: tighter padding on small screens */
+  .modal-backdrop{padding:16px 10px;align-items:flex-start;}
+  .modal-head{padding:14px 16px;}
+  .modal-head h3{font-size:15px;}
+  .modal-body{padding:16px;max-height:75vh;}
+  .modal-foot{padding:12px 16px;flex-wrap:wrap;}
+  .modal-foot .btn{flex:1;}
+  /* Cards & content */
+  #content{padding:14px;}
+  .card-pad{padding:16px;}
+  .page-head h1{font-size:19px;}
+  /* Toasts: full-width friendly on phones */
+  #toastHost{left:12px;right:12px;bottom:16px;}
+  .toast{min-width:0;width:100%;}
+  /* Progress rows with a wide fixed label (e.g. Safinah bab names) */
+  .progress-row{flex-wrap:wrap;gap:8px;}
+  .progress-row .lbl.lbl-wide{width:100%;}
+  /* Org chart & calendar: shrink to fit narrow screens */
+  .org-node{min-width:130px;padding:10px 12px;}
+  .cal-cell{min-height:64px;padding:4px;}
+  .cal-evt{font-size:9px;padding:2px 4px;}
+  .cal-dow{padding:6px 2px;font-size:9.5px;}
+}
+@media (max-width:420px){
+  .stat-grid{grid-template-columns:1fr;}
+  .demo-grid{grid-template-columns:1fr;}
+  #content{padding:12px;}
+  .page-actions{width:100%;}
+  .page-actions .btn{flex:1;}
+  .table-toolbar{flex-direction:column;align-items:stretch;}
+  .table-toolbar .search-wrap{max-width:none;}
 }
 
 /* ============================================================
@@ -484,9 +546,15 @@ tbody tr:hover{background:var(--surface-alt);}
   .pub-brand .t2{display:none;}
   .pub-brand .logo-box{width:36px;height:36px;}
   .pub-search-btn, .pub-hamburger{width:34px;height:34px;}
+  .pub-search-panel .psi input{font-size:16px;}
+  .pub-search-panel{top:64px;width:calc(100vw - 24px);}
+  .pub-value-grid{grid-template-columns:1fr 1fr;}
+  .pub-hero h1{font-size:26px;}
+  .pub-hero-actions .btn{flex:1;}
 }
 @media (max-width:380px){
   .pub-header-right .btn-sm{padding:8px 12px;font-size:12.5px;}
+  .pub-value-grid{grid-template-columns:1fr;}
 }
 </style>
 <div id="app"></div>
@@ -1636,7 +1704,7 @@ function renderTopbar(){
       </div>
       <button class="profile-btn" id="profileBtn">
         <div class="avatar" style="width:30px;height:30px;font-size:11px;">${initials(u.nama)}</div>
-        <div style="text-align:left;">
+        <div class="pb-info" style="text-align:left;">
           <div style="font-size:12.3px;font-weight:700;line-height:1.2;">${esc(u.nama.split(' ').slice(0,2).join(' '))}</div>
           <div style="font-size:10.5px;color:var(--text-muted);">${ROLE_LABEL[u.role]}</div>
         </div>
@@ -2728,7 +2796,7 @@ VIEWS['safinah-progres'] = {
           <div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="width:36px;height:36px;font-size:12px;">${initials(s.nama)}</div><div><b>${esc(s.nama)}</b><div style="font-size:11.5px;color:var(--text-muted);">${esc(s.kelas)}</div></div></div>
           <div style="font-weight:800;color:var(--gold-dark);font-size:16px;">${avg}%</div>
         </div>
-        ${s.safinahProgress.map((p,i)=>`<div class="progress-row"><div class="lbl" style="width:200px;">${esc(s.safinahBab[i])}</div><div class="progress-track"><div class="progress-fill gold" style="width:${p.persen}%"></div></div><div class="progress-pct">${p.persen}%</div></div>`).join('')}
+        ${s.safinahProgress.map((p,i)=>`<div class="progress-row"><div class="lbl lbl-wide">${esc(s.safinahBab[i])}</div><div class="progress-track"><div class="progress-fill gold" style="width:${p.persen}%"></div></div><div class="progress-pct">${p.persen}%</div></div>`).join('')}
       </div>`;
     }).join('')}
     </div>`;
