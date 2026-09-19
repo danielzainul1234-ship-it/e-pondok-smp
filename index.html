@@ -568,6 +568,30 @@ const ROLE_LABEL = { admin:"Admin", pengurus:"Pengurus", ustadz:"Ustadz/Ustadzah
 function uid(prefix){ return prefix + "-" + Math.random().toString(36).slice(2,8); }
 function initials(name){ return (name||"").split(" ").filter(Boolean).slice(0,2).map(w=>w[0]).join("").toUpperCase(); }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function resizeImageToDataUrl(file, maxDim){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error);
+    reader.onload = ev => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Gagal memuat gambar'));
+      img.onload = () => {
+        let { width, height } = img;
+        if(width > maxDim || height > maxDim){
+          if(width >= height){ height = Math.round(height * (maxDim/width)); width = maxDim; }
+          else { width = Math.round(width * (maxDim/height)); height = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 function fmtDate(d){ const dt = (d instanceof Date)? d : new Date(d); if(isNaN(dt)) return d; return dt.toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'}); }
 function fmtDateShort(d){ const dt=(d instanceof Date)?d:new Date(d); if(isNaN(dt)) return d; return dt.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}); }
 function todayStr(){ return "2026-09-19"; }
@@ -777,6 +801,7 @@ DB.notifikasi = [
    pengunjung lain. Untuk itu diperlukan backend + database.
    ============================================================ */
 const STORAGE_KEY = 'epondokSmpDataV1';
+let storageQuotaWarned = false;
 
 function saveToStorage(){
   try{
@@ -792,7 +817,17 @@ function saveToStorage(){
       notifikasi: DB.notifikasi
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  }catch(e){ console.warn('Gagal menyimpan data lokal:', e); }
+    storageQuotaWarned = false;
+  }catch(e){
+    console.warn('Gagal menyimpan data lokal:', e);
+    // Penyimpanan browser penuh (biasanya gara-gara gambar/logo terlalu besar) -- beri tahu
+    // admin sekali saja per sesi supaya jelas kenapa perubahan tidak muncul di situs publik,
+    // alih-alih gagal diam-diam.
+    if(!storageQuotaWarned && typeof toast === 'function'){
+      storageQuotaWarned = true;
+      toast('Penyimpanan browser penuh, sebagian perubahan (mis. logo) mungkin tidak tersimpan. Coba gunakan gambar berukuran lebih kecil.', 'err');
+    }
+  }
 }
 
 function loadFromStorage(){
@@ -3063,9 +3098,14 @@ VIEWS['pengaturan'] = {
     logoBtn.addEventListener('click', ()=>logoInput.click());
     logoInput.addEventListener('change', e=>{
       const file = e.target.files[0]; if(!file) return;
-      const reader = new FileReader();
-      reader.onload = ev=>{ STATE.settings.logo = ev.target.result; toast('Logo pondok berhasil diperbarui.'); render(); };
-      reader.readAsDataURL(file);
+      if(!file.type.startsWith('image/')){ toast('Berkas harus berupa gambar (PNG/JPG).', 'err'); return; }
+      resizeImageToDataUrl(file, 320).then(dataUrl=>{
+        STATE.settings.logo = dataUrl;
+        toast('Logo pondok berhasil diperbarui.'); render();
+      }).catch(err=>{
+        console.warn('Gagal memproses logo:', err);
+        toast('Gagal memproses gambar logo. Coba gambar lain.', 'err');
+      });
     });
     on('.tab-btn','click', e=>{
       $all('.tab-btn').forEach(t=>t.classList.remove('active'));
