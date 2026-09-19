@@ -1,0 +1,14 @@
+{
+  "name": "e-pondok-smp",
+  "version": "1.0.0",
+  "description": "Website E-Pondok SMP - Sistem Informasi dan Manajemen Pondok Pesantren",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}
