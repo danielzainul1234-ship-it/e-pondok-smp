@@ -765,6 +765,55 @@ DB.notifikasi = [
 ];
 
 /* ============================================================
+   PENYIMPANAN LOKAL (localStorage)
+   Semua perubahan yang dibuat Admin/Pengurus/Ustadz (Pengaturan,
+   Data Santri, Struktur Pengurus, Kegiatan, Hafalan, Absensi,
+   Pengumuman) disimpan di localStorage browser ini, lalu dimuat
+   ulang saat halaman dibuka lagi -- termasuk saat membuka halaman
+   publik di tab/kunjungan baru pada browser & perangkat yang sama.
+   Catatan: ini penyimpanan sisi-klien (per-browser), bukan basis
+   data server, sehingga tidak otomatis tersinkron ke perangkat
+   pengunjung lain. Untuk itu diperlukan backend + database.
+   ============================================================ */
+const STORAGE_KEY = 'epondokSmpDataV1';
+
+function saveToStorage(){
+  try{
+    const payload = {
+      settings: STATE.settings,
+      santri: DB.santri,
+      pengurus: DB.pengurus,
+      kegiatan: DB.kegiatan,
+      setoranQuran: DB.setoranQuran,
+      setoranSafinah: DB.setoranSafinah,
+      absensi: DB.absensi,
+      pengumuman: DB.pengumuman,
+      notifikasi: DB.notifikasi
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  }catch(e){ console.warn('Gagal menyimpan data lokal:', e); }
+}
+
+function loadFromStorage(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return;
+    const data = JSON.parse(raw);
+    if(data && typeof data === 'object'){
+      if(data.settings && typeof data.settings === 'object') Object.assign(STATE.settings, data.settings);
+      if(Array.isArray(data.santri)) DB.santri = data.santri;
+      if(Array.isArray(data.pengurus)) DB.pengurus = data.pengurus;
+      if(Array.isArray(data.kegiatan)) DB.kegiatan = data.kegiatan;
+      if(Array.isArray(data.setoranQuran)) DB.setoranQuran = data.setoranQuran;
+      if(Array.isArray(data.setoranSafinah)) DB.setoranSafinah = data.setoranSafinah;
+      if(Array.isArray(data.absensi)) DB.absensi = data.absensi;
+      if(Array.isArray(data.pengumuman)) DB.pengumuman = data.pengumuman;
+      if(Array.isArray(data.notifikasi)) DB.notifikasi = data.notifikasi;
+    }
+  }catch(e){ console.warn('Gagal memuat data lokal:', e); }
+}
+
+/* ============================================================
    SIDEBAR MENU CONFIG (role-based)
    ============================================================ */
 const MENU = [
@@ -867,6 +916,7 @@ function navigate(route, params){
 }
 
 function render(){
+  saveToStorage();
   const app = document.getElementById('app');
   if(!STATE.currentUser){
     if(STATE.route === 'login'){
@@ -3010,5 +3060,6 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
 /* ============================================================
    BOOT
    ============================================================ */
+loadFromStorage();
 render();
 </script>
