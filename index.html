@@ -679,6 +679,73 @@ const KELAS_LIST = ["7A","7B","7C","8A","8B","9A","9B"];
 const KAMAR_PUTRA = ["Ar-Raudhah 1","Ar-Raudhah 2","Al-Hidayah 1"];
 const KAMAR_PUTRI = ["An-Nur 1","An-Nur 2","Az-Zahra 1"];
 
+/* Daftar Bab/Fashl Kitab Safinatun Najah untuk setoran Hafalan Safinah */
+const SAFINAH_BAB_DEFAULT = [
+  "Muqoddimah",
+  "Fashl 1 : Rukun Islam",
+  "Fashl 2 : Rukun Iman",
+  "Fashl 3 : Makna Tauhid",
+  "Fashl 4 : Tanda Baligh",
+  "Fashl 5 : Syarat Istinja'",
+  "Fashl 6 : Fardhu Wudhu",
+  "Fashl 7 : Hakikat Niat",
+  "Fashl 8 : Tentang Air",
+  "Fashl 9 : Yang Mewajibkan Mandi",
+  "Fashl 10 : Fardhunya Mandi",
+  "Fashl 11 : Syarat Wudhu",
+  "Fashl 12 : Yang Membatalkan Wudhu",
+  "Fashl 13 : Yang Diharamkan Sebab Hadats",
+  "Fashl 14 : Sebab Tayammum",
+  "Fashl 15 : Syarat Tayammum",
+  "Fashl 16 : Rukun Tayammum",
+  "Fashl 17 : Yang Membatalkan Tayammum",
+  "Fashl 18 : Benda Najis yang Bisa Suci",
+  "Fashl 19 : Macam-macam Najis",
+  "Fashl 20 : Haid dan Nifas",
+  "Fashl 21 : Udzur Sholat",
+  "Fashl 22 : Syarat Sah Sholat",
+  "Fashl 23 : Macam-macam Hadats",
+  "Fashl 24 : Tentang Aurat",
+  "Fashl 25 : Rukun Sholat",
+  "Fashl 26 : Tingkatan Niat",
+  "Fashl 27 : Syarat Takbiratul Ihram",
+  "Fashl 28 : Syarat Fatihah",
+  "Fashl 29 : Tasydid Fatihah",
+  "Fashl 30 : Sunnah Mengangkat Tangan",
+  "Fashl 31 : Anggota Sujud",
+  "Fashl 32 : Syarat Sujud",
+  "Fashl 33 : Tasydid Tasyahhud",
+  "Fashl 34 : Tasydid Sholawat dan Salam",
+  "Fashl 35 : Waktu-waktu Sholat",
+  "Fashl 36 : Diam Dalam Sholat",
+  "Fashl 37 : Waktu-waktu Diharamkan Sholat",
+  "Fashl 38 : Sunnah-sunnah Ab'adl Sholat",
+  "Fashl 39 : Sebab Sujud Sahwi",
+  "Fashl 40 : Yang Membatalkan Sholat",
+  "Fashl 41 : Niat Menjadi Imam",
+  "Fashl 42 : Syarat Menjadi Makmum",
+  "Fashl 43 : Bentuk Makmum",
+  "Fashl 44 : Syarat Jamak Taqdim",
+  "Fashl 45 : Syarat Jamak Ta'khir",
+  "Fashl 46 : Mengqoshor Sholat",
+  "Fashl 47 : Syarat Sholat Jum'at",
+  "Fashl 48 : Rukun Khutbah",
+  "Fashl 49 : Syarat Dua Khutbah",
+  "Fashl 50 : Tentang Jenazah",
+  "Fashl 51 : Tentang Mengkafani Mayyit",
+  "Fashl 52 : Mensholati Jenazah",
+  "Fashl 53 : Menguburkan Jenazah",
+  "Fashl 54 : Menggali Kuburan Mayit Kembali",
+  "Fashl 55 : Minta Tolong [Isti'anah]",
+  "Fashl 56 : Menjelaskan Tentang Zakat",
+  "Penutup"
+];
+/* Ambil judul materi dari label bab, tanpa prefiks "Fashl N :" (aman untuk Muqoddimah/Penutup) */
+function babMateri(label){
+  const m = (label||'').match(/^Fashl\s*\d+\s*:\s*(.+)$/i);
+  return m ? m[1] : (label||'');
+}
+
 const NAMA_SANTRI_L = ["Ahmad Fauzan Ramadhan","Muhammad Rizky Alfarizi","Fajar Nur Hidayat","Bagas Adi Saputra","Ilham Maulana Yusuf","Zidan Al-Ghazali","Rafi Ahmad Syauqi","Dimas Prasetyo Nugraha"];
 const NAMA_SANTRI_P = ["Siti Aisyah Nur Fadhilah","Nabila Zahra Ramadhani","Khansa Salsabila Putri","Anisa Fitri Rahmawati","Zahra Nur Azizah","Hafshah Amelia Putri"];
 
@@ -778,8 +845,8 @@ function seedProgress(seed, n, base){
 }
 DB.santri.forEach((s,i)=>{
   s.quranProgress = seedProgress(i*7+13, 30, 92 - (i%4)*8);
-  s.safinahBab = ["Bab 1: Rukun Islam & Iman","Bab 2: Thaharah & Wudhu","Bab 3: Hal yang Membatalkan Wudhu","Bab 4: Najis & Cara Mensucikan","Bab 5: Tayammum","Bab 6: Rukun & Syarat Shalat","Bab 7: Hal yang Membatalkan Shalat","Bab 8: Zakat & Puasa"];
-  s.safinahProgress = seedProgress(i*11+5, 8, 88 - (i%3)*10);
+  s.safinahBab = [...SAFINAH_BAB_DEFAULT];
+  s.safinahProgress = seedProgress(i*11+5, SAFINAH_BAB_DEFAULT.length, 88 - (i%3)*10);
 });
 
 const SURAT_JUZ30 = ["An-Naba","An-Nazi'at","'Abasa","At-Takwir","Al-Infitar","Al-Muthaffifin","Al-Insyiqaq","Al-Buruj","At-Tariq","Al-A'la"];
@@ -811,11 +878,11 @@ DB.setoranSafinah = [];
   let no=1;
   DB.santri.slice(0,10).forEach((s,i)=>{
     for(let j=0;j<2;j++){
-      const babIdx = (i+j)%8;
+      const babIdx = (i+j)%SAFINAH_BAB_DEFAULT.length;
       DB.setoranSafinah.push({
         id:"SS"+String(no).padStart(3,'0'), santriId:s.id, santriNama:s.nama,
         tanggal:`2026-09-${String(9+j+(i%6)).padStart(2,'0')}`,
-        bab: babIdx+1, materi: s.safinahBab[babIdx].split(": ")[1], halaman: `${(babIdx*3)+1}-${(babIdx*3)+4}`,
+        bab: babIdx+1, materi: babMateri(s.safinahBab[babIdx]), halaman: `${(babIdx*3)+1}-${(babIdx*3)+4}`,
         teks: "Hafalan matan sesuai bab yang diujikan.",
         nilai: 72+((i*9+j*11)%26), kelancaran: pick(["Lancar","Perlu Mengulang"], i+j),
         catatan: "Perbaiki pelafalan pada beberapa istilah fiqih.",
@@ -1634,12 +1701,13 @@ PUBLIC_VIEWS['hafalan-publik'] = {
       juzAvg.push({n:j, persen: Math.round(vals.reduce((a,b)=>a+b,0)/vals.length)});
     }
     const overallQuran = Math.round(juzAvg.reduce((a,b)=>a+b.persen,0)/30);
+    const babCount = SAFINAH_BAB_DEFAULT.length;
     const babAvg = [];
-    for(let b=0;b<8;b++){
+    for(let b=0;b<babCount;b++){
       const vals = DB.santri.map(x=>(x.safinahProgress.find(p=>p.n===b+1)||{persen:0}).persen);
       babAvg.push({n:b+1, persen: Math.round(vals.reduce((a,c)=>a+c,0)/vals.length)});
     }
-    const overallSafinah = Math.round(babAvg.reduce((a,b)=>a+b.persen,0)/8);
+    const overallSafinah = Math.round(babAvg.reduce((a,b)=>a+b.persen,0)/babCount);
     return `
     <section class="pub-section tight">
       <div class="pub-section-head">
@@ -1649,7 +1717,7 @@ PUBLIC_VIEWS['hafalan-publik'] = {
       </div>
       <div class="stat-grid" style="grid-template-columns:repeat(2,1fr);">
         <div class="stat-card"><div class="top"><div class="stat-ic" style="background:var(--emerald-50);color:var(--emerald-700);">&#128214;</div></div><div class="val">${overallQuran}%</div><div class="lbl">Rata-rata Capaian Al-Qur'an (30 Juz)</div></div>
-        <div class="stat-card"><div class="top"><div class="stat-ic" style="background:var(--gold-soft);color:var(--gold-dark);">&#128213;</div></div><div class="val">${overallSafinah}%</div><div class="lbl">Rata-rata Capaian Safinah (8 Bab)</div></div>
+        <div class="stat-card"><div class="top"><div class="stat-ic" style="background:var(--gold-soft);color:var(--gold-dark);">&#128213;</div></div><div class="val">${overallSafinah}%</div><div class="lbl">Rata-rata Capaian Safinah (${babCount} Bab)</div></div>
       </div>
       <div class="grid-2">
         <div class="card card-pad">
@@ -1658,7 +1726,9 @@ PUBLIC_VIEWS['hafalan-publik'] = {
         </div>
         <div class="card card-pad">
           <div class="section-title" style="margin-bottom:14px;">Rata-Rata Progres Safinah per Bab</div>
-          ${babAvg.map(b=>`<div class="progress-row"><div class="lbl">Bab ${b.n}</div><div class="progress-track"><div class="progress-fill gold" style="width:${b.persen}%;"></div></div><div class="progress-pct">${b.persen}%</div></div>`).join('')}
+          <div style="max-height:280px;overflow-y:auto;">
+          ${babAvg.map(b=>`<div class="progress-row"><div class="lbl lbl-wide">${esc(SAFINAH_BAB_DEFAULT[b.n-1])}</div><div class="progress-track"><div class="progress-fill gold" style="width:${b.persen}%;"></div></div><div class="progress-pct">${b.persen}%</div></div>`).join('')}
+          </div>
         </div>
       </div>
       <div class="pub-notice">
@@ -2199,7 +2269,7 @@ function openSantriModal(editId){
       toast('Data santri berhasil diperbarui.');
     } else {
       const id = "S"+String(DB.santri.length+1).padStart(3,'0');
-      const newS = { id, ...data, quranProgress: seedProgress(DB.santri.length*5+3,30,20), safinahBab: DB.santri[0].safinahBab, safinahProgress: seedProgress(DB.santri.length*3+2,8,15), foto:null };
+      const newS = { id, ...data, quranProgress: seedProgress(DB.santri.length*5+3,30,20), safinahBab: [...SAFINAH_BAB_DEFAULT], safinahProgress: seedProgress(DB.santri.length*3+2,SAFINAH_BAB_DEFAULT.length,15), foto:null };
       DB.santri.push(newS);
       toast('Santri baru berhasil ditambahkan.');
     }
@@ -2499,7 +2569,7 @@ VIEWS['santri-detail'] = {
     const s = DB.santri.find(x=>x.id===id);
     if(!s) return `<div class="empty-state">Santri tidak ditemukan.</div>`;
     const avgQuran = Math.round(s.quranProgress.reduce((a,p)=>a+p.persen,0)/30);
-    const avgSafinah = Math.round(s.safinahProgress.reduce((a,p)=>a+p.persen,0)/8);
+    const avgSafinah = Math.round(s.safinahProgress.reduce((a,p)=>a+p.persen,0)/s.safinahProgress.length);
     const juzSelesai = s.quranProgress.filter(p=>p.persen>=100).length;
     const babSelesai = s.safinahProgress.filter(p=>p.persen>=100).length;
     const lastQ = DB.setoranQuran.filter(x=>x.santriId===s.id).slice(-1)[0];
@@ -2543,12 +2613,12 @@ VIEWS['santri-detail'] = {
         <div class="card card-pad">
           <div class="section-title" style="margin-bottom:12px;">Hafalan Safinah</div>
           <div class="stat-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px;">
-            <div><div style="font-size:20px;font-weight:800;color:var(--emerald-700);">${babSelesai}/8</div><div style="font-size:11px;color:var(--text-muted);">Bab Selesai</div></div>
+            <div><div style="font-size:20px;font-weight:800;color:var(--emerald-700);">${babSelesai}/${s.safinahProgress.length}</div><div style="font-size:11px;color:var(--text-muted);">Bab Selesai</div></div>
             <div><div style="font-size:20px;font-weight:800;">${lastS?fmtDateShort(lastS.tanggal):'-'}</div><div style="font-size:11px;color:var(--text-muted);">Setoran Terakhir</div></div>
             <div><div style="font-size:20px;font-weight:800;">${nilaiRataS}</div><div style="font-size:11px;color:var(--text-muted);">Nilai Rata-rata</div></div>
             <div><div style="font-size:20px;font-weight:800;color:var(--gold-dark);">${avgSafinah}%</div><div style="font-size:11px;color:var(--text-muted);">Total Progres</div></div>
           </div>
-          ${svgBarChart(s.safinahProgress.map((p,i)=>({label:'B'+p.n, value:p.persen, color:p.persen>=100?'var(--emerald-600)':'var(--gold)'})), {max:100})}
+          ${svgBarChart(s.safinahProgress.slice(0,15).map((p,i)=>({label:'F'+p.n, value:p.persen, color:p.persen>=100?'var(--emerald-600)':'var(--gold)'})), {max:100})}
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:18px;">
@@ -2564,7 +2634,9 @@ VIEWS['santri-detail'] = {
         </div>
         <div class="card card-pad">
           <div class="section-title" style="margin-bottom:10px;">Progres Safinah (per Bab)</div>
-          ${s.safinahProgress.map(p=>`<div class="progress-row"><div class="lbl" style="width:56px;">Bab ${p.n}</div><div class="progress-track"><div class="progress-fill gold" style="width:${p.persen}%"></div></div><div class="progress-pct">${p.persen}%</div></div>`).join('')}
+          <div style="max-height:280px;overflow-y:auto;">
+          ${s.safinahProgress.map((p,i)=>`<div class="progress-row"><div class="lbl lbl-wide">${esc(s.safinahBab[i])}</div><div class="progress-track"><div class="progress-fill gold" style="width:${p.persen}%"></div></div><div class="progress-pct">${p.persen}%</div></div>`).join('')}
+          </div>
         </div>
         <div class="card card-pad">
           <div class="section-title" style="margin-bottom:8px;">Data Orang Tua / Wali</div>
@@ -2942,7 +3014,7 @@ function openSetoranSafinahModal(id){
   document.getElementById('saveSBtn').addEventListener('click', ()=>{
     const g=id=>document.getElementById(id).value;
     const santri = DB.santri.find(s=>s.id===g('fs_santri'));
-    const data = { santriId:santri.id, santriNama:santri.nama, tanggal:g('fs_tanggal'), bab:parseInt(g('fs_bab')), materi:santri.safinahBab[parseInt(g('fs_bab'))-1].split(': ')[1], halaman:g('fs_halaman'), nilai:parseInt(g('fs_nilai')), kelancaran:g('fs_kelancaran'), status:g('fs_status'), penyimak:g('fs_penyimak'), teks:g('fs_teks'), catatan:g('fs_catatan') };
+    const data = { santriId:santri.id, santriNama:santri.nama, tanggal:g('fs_tanggal'), bab:parseInt(g('fs_bab')), materi:babMateri(santri.safinahBab[parseInt(g('fs_bab'))-1]), halaman:g('fs_halaman'), nilai:parseInt(g('fs_nilai')), kelancaran:g('fs_kelancaran'), status:g('fs_status'), penyimak:g('fs_penyimak'), teks:g('fs_teks'), catatan:g('fs_catatan') };
     if(existing){ Object.assign(existing,data); toast('Setoran Safinah diperbarui.'); }
     else {
       DB.setoranSafinah.push({ id:uid('SS'), ...data });
@@ -2976,13 +3048,15 @@ VIEWS['safinah-progres'] = {
     return `${pageHead('Progres Hafalan Safinah', 'Progres per bab — Kitab Safinatun Najah')}
     <div style="display:flex;flex-direction:column;gap:16px;">
     ${targetList.map(s=>{
-      const avg = Math.round(s.safinahProgress.reduce((a,p)=>a+p.persen,0)/8);
+      const avg = Math.round(s.safinahProgress.reduce((a,p)=>a+p.persen,0)/s.safinahProgress.length);
       return `<div class="card card-pad">
         <div class="row-between" style="margin-bottom:12px;">
           <div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="width:36px;height:36px;font-size:12px;">${initials(s.nama)}</div><div><b>${esc(s.nama)}</b><div style="font-size:11.5px;color:var(--text-muted);">${esc(s.kelas)}</div></div></div>
           <div style="font-weight:800;color:var(--gold-dark);font-size:16px;">${avg}%</div>
         </div>
+        <div style="max-height:280px;overflow-y:auto;">
         ${s.safinahProgress.map((p,i)=>`<div class="progress-row"><div class="lbl lbl-wide">${esc(s.safinahBab[i])}</div><div class="progress-track"><div class="progress-fill gold" style="width:${p.persen}%"></div></div><div class="progress-pct">${p.persen}%</div></div>`).join('')}
+        </div>
       </div>`;
     }).join('')}
     </div>`;
@@ -3002,7 +3076,7 @@ VIEWS['safinah-rekap'] = {
       <div class="stat-card"><div class="val">${sudahSetor}</div><div class="lbl">Status Sudah Setor</div></div>
     </div>
     <div class="card card-pad"><div class="section-title" style="margin-bottom:12px;">Progres per Kelas (rata-rata %)</div>
-      ${DB.kelasList.map(k=>{ const members = DB.santri.filter(s=>s.kelas===k); if(!members.length) return ''; const avg = Math.round(members.reduce((a,s)=>a+s.safinahProgress.reduce((x,p)=>x+p.persen,0)/8,0)/members.length); return `<div class="progress-row"><div class="lbl">${esc(k)}</div><div class="progress-track"><div class="progress-fill gold" style="width:${avg}%"></div></div><div class="progress-pct">${avg}%</div></div>`; }).join('')}
+      ${DB.kelasList.map(k=>{ const members = DB.santri.filter(s=>s.kelas===k); if(!members.length) return ''; const avg = Math.round(members.reduce((a,s)=>a+s.safinahProgress.reduce((x,p)=>x+p.persen,0)/s.safinahProgress.length,0)/members.length); return `<div class="progress-row"><div class="lbl">${esc(k)}</div><div class="progress-track"><div class="progress-fill gold" style="width:${avg}%"></div></div><div class="progress-pct">${avg}%</div></div>`; }).join('')}
     </div>`;
   },
   bind(){ const b=document.getElementById('rkSExcel'); if(b) b.addEventListener('click', ()=>exportRowsToExcel('Rekap-Hafalan-Safinah.xlsx', ['Santri','Tanggal','Bab','Materi','Nilai','Kelancaran','Status','Penyimak'], DB.setoranSafinah.map(x=>[x.santriNama,x.tanggal,x.bab,x.materi,x.nilai,x.kelancaran,x.status,x.penyimak]))); }
