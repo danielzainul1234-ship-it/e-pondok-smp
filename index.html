@@ -1778,14 +1778,20 @@ PUBLIC_VIEWS['hafalan-publik'] = {
       const vals = DB.santri.map(x=>(x.quranProgress.find(p=>p.n===j)||{persen:0}).persen);
       juzAvg.push({n:j, persen: Math.round(vals.reduce((a,b)=>a+b,0)/vals.length)});
     }
-    const overallQuran = Math.round(juzAvg.reduce((a,b)=>a+b.persen,0)/30);
+    // Dibulatkan ke 1 angka desimal (bukan ke bilangan bulat) -- terutama untuk
+    // Safinah yang punya 58 bab, rata-rata gabungan dari progres yang baru mulai
+    // sedikit (mis. baru 1-2 santri yang disetorkan) bisa jatuh di bawah 0.5% dan
+    // membulat jadi "0%" walau progres per-bab-nya sebenarnya sudah tercatat --
+    // ini bisa terlihat seperti "data tidak update" padahal cuma pembulatan.
+    const round1 = n => Math.round(n*10)/10;
+    const overallQuran = round1(juzAvg.reduce((a,b)=>a+b.persen,0)/30);
     const babCount = SAFINAH_BAB_DEFAULT.length;
     const babAvg = [];
     for(let b=0;b<babCount;b++){
       const vals = DB.santri.map(x=>(x.safinahProgress.find(p=>p.n===b+1)||{persen:0}).persen);
       babAvg.push({n:b+1, persen: Math.round(vals.reduce((a,c)=>a+c,0)/vals.length)});
     }
-    const overallSafinah = Math.round(babAvg.reduce((a,b)=>a+b.persen,0)/babCount);
+    const overallSafinah = round1(babAvg.reduce((a,b)=>a+b.persen,0)/babCount);
     const totalWirid = DB.setoranWirid.length;
     const rataNilaiWirid = Math.round(DB.setoranWirid.reduce((a,x)=>a+x.nilai,0)/(totalWirid||1));
     const wiridByJenis = WIRID_JENIS.map((j,i)=>({label:j, value: DB.setoranWirid.filter(x=>x.jenis===j).length, color: ['var(--emerald-700)','var(--gold-dark)','var(--info)'][i%3]}));
@@ -3341,8 +3347,14 @@ VIEWS['absensi-kegiatan'] = {
     const absKegSelect = document.getElementById('absKegSelect');
     if(!absKegSelect) return; // tidak ada kegiatan sama sekali -- tampilan empty-state, tidak ada elemen untuk di-bind
     absKegSelect.addEventListener('change', e=>{ absensiUIState.kegiatanId=e.target.value; rerenderContentOnly(); });
-    on('[data-absstatus]','change', e=>{ const id=e.currentTarget.dataset.absstatus; const rec=DB.absensi.find(x=>x.id===id); rec.status=e.target.value; });
-    document.getElementById('saveAbsensiBtn').addEventListener('click', ()=>toast('Absensi kegiatan berhasil disimpan.'));
+    // PENTING: setiap perubahan status absensi HARUS langsung memicu penyimpanan
+    // (saveToStorage -> sinkron ke server), bukan cuma mengubah data di memori.
+    // Sebelumnya perubahan di sini tidak pernah tersimpan/tersinkron sampai ada
+    // navigasi lain yang kebetulan memicu render() -- kalau pengguna langsung
+    // menutup tab setelah menandai absensi, perubahannya bisa hilang begitu saja
+    // walau tombol "Simpan Absensi" sudah menampilkan pesan berhasil.
+    on('[data-absstatus]','change', e=>{ const id=e.currentTarget.dataset.absstatus; const rec=DB.absensi.find(x=>x.id===id); rec.status=e.target.value; saveToStorage(); });
+    document.getElementById('saveAbsensiBtn').addEventListener('click', ()=>{ saveToStorage(); toast('Absensi kegiatan berhasil disimpan.'); });
     document.getElementById('printAbsensiBtn').addEventListener('click', ()=>{
       const records = getAbsensiForKegiatan(absensiUIState.kegiatanId);
       const rows = records.map(r=>`<tr><td>${esc(r.santriNama)}</td><td>${esc(r.kelas)}</td><td>${esc(r.status)}</td></tr>`).join('');
