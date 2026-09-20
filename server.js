@@ -184,13 +184,24 @@ const server = http.createServer((req, res) => {
           res.end('404 Not Found');
           return;
         }
-        res.writeHead(200, { 'Content-Type': MIME['.html'] });
+        // Cache-Control: no-store -- app shell (HTML+JS) ini WAJIB selalu diambil
+        // baru dari server, tidak boleh disimpan cache oleh browser/proxy/CDN.
+        // Tanpa header ini, sebagian perangkat (terutama browser HP) bisa saja
+        // memakai salinan index.html yang lama dari cache -- artinya perangkat itu
+        // menjalankan KODE lama yang belum punya perbaikan/fitur terbaru, walaupun
+        // data di server (/api/data) sudah benar & terbaru. Ini bisa terlihat
+        // seperti "data tidak sinkron" padahal sebenarnya kode di perangkat itu
+        // yang basi, bukan datanya.
+        res.writeHead(200, { 'Content-Type': MIME['.html'], 'Cache-Control': 'no-store' });
         res.end(data2);
       });
       return;
     }
     const ext = path.extname(filePath).toLowerCase();
-    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+    // Sama seperti di atas: jangan biarkan browser/proxy meng-cache file statis
+    // aplikasi ini (index.html, dst.) supaya setiap perangkat selalu memakai versi
+    // terbaru yang benar-benar sudah di-deploy, bukan salinan lama dari cache.
+    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Cache-Control': 'no-store' });
     res.end(data);
   });
 });

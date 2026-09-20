@@ -1222,6 +1222,12 @@ function doLogin(username, password){
   STATE.currentUser = u;
   STATE.route = u.role==='santri' ? 'profil-saya' : 'dashboard';
   render();
+  // Setiap kali ada yang login, segarkan dulu dengan data TERBARU dari server --
+  // supaya begitu masuk, siapa pun (admin, ustadz, atau santri) langsung melihat
+  // data paling baru yang dikelola admin, bukan cache lama perangkat ini yang
+  // mungkin sudah beberapa saat tidak disegarkan (mis. tab yang dibiarkan
+  // terbuka di layar login/beranda cukup lama sebelum akhirnya login).
+  loadFromServer();
   return true;
 }
 function doLogout(){
@@ -3025,7 +3031,15 @@ VIEWS['quran-setoran'] = {
   bind(){
     const addBtn=document.getElementById('addQBtn'); if(addBtn) addBtn.addEventListener('click',()=>openSetoranQuranModal(null));
     on('[data-editq]','click', e=>openSetoranQuranModal(e.currentTarget.dataset.editq));
-    on('[data-delq]','click', e=>{ const id=e.currentTarget.dataset.delq; confirmDelete('Catatan setoran ini akan dihapus.', ()=>{ DB.setoranQuran=DB.setoranQuran.filter(x=>x.id!==id); toast('Catatan setoran dihapus.'); navigate('quran-setoran'); }); });
+    on('[data-delq]','click', e=>{ const id=e.currentTarget.dataset.delq; confirmDelete('Catatan setoran ini akan dihapus.', ()=>{
+      const rec = DB.setoranQuran.find(x=>x.id===id);
+      DB.setoranQuran=DB.setoranQuran.filter(x=>x.id!==id);
+      // Batalkan juga kontribusi progres yang sempat ditambahkan catatan ini,
+      // supaya menghapus setoran (mis. karena salah input) tidak meninggalkan
+      // persentase progres yang "hantu" -- tetap tinggi padahal catatannya sudah tidak ada.
+      if(rec){ const santri = DB.santri.find(s=>s.id===rec.santriId); const prog = santri && santri.quranProgress.find(p=>p.n===rec.juz); if(prog) prog.persen = Math.max(0, prog.persen - (rec.kelancaran==='Lancar'?15:5)); }
+      toast('Catatan setoran dihapus.'); navigate('quran-setoran');
+    }); });
   }
 };
 
@@ -3125,7 +3139,14 @@ VIEWS['safinah-setoran'] = {
   bind(){
     const addBtn=document.getElementById('addSBtn'); if(addBtn) addBtn.addEventListener('click',()=>openSetoranSafinahModal(null));
     on('[data-edits]','click', e=>openSetoranSafinahModal(e.currentTarget.dataset.edits));
-    on('[data-dels]','click', e=>{ const id=e.currentTarget.dataset.dels; confirmDelete('Catatan setoran ini akan dihapus.', ()=>{ DB.setoranSafinah=DB.setoranSafinah.filter(x=>x.id!==id); toast('Catatan setoran dihapus.'); navigate('safinah-setoran'); }); });
+    on('[data-dels]','click', e=>{ const id=e.currentTarget.dataset.dels; confirmDelete('Catatan setoran ini akan dihapus.', ()=>{
+      const rec = DB.setoranSafinah.find(x=>x.id===id);
+      DB.setoranSafinah=DB.setoranSafinah.filter(x=>x.id!==id);
+      // Sama seperti Hafalan Al-Qur'an: batalkan kontribusi progres catatan yang dihapus
+      // supaya progres Safinah tidak "menggantung" tinggi padahal setorannya sudah dihapus.
+      if(rec){ const santri = DB.santri.find(s=>s.id===rec.santriId); const prog = santri && santri.safinahProgress.find(p=>p.n===rec.bab); if(prog) prog.persen = Math.max(0, prog.persen - (rec.kelancaran==='Lancar'?20:5)); }
+      toast('Catatan setoran dihapus.'); navigate('safinah-setoran');
+    }); });
   }
 };
 
@@ -3763,7 +3784,10 @@ loadFromServer();  // lalu segarkan dengan data terbaru dari server (sinkron ant
 document.addEventListener('visibilitychange', ()=>{
   if(document.visibilityState === 'visible') loadFromServer();
 });
+window.addEventListener('focus', ()=>{
+  if(document.visibilityState === 'visible') loadFromServer();
+});
 setInterval(()=>{
   if(document.visibilityState === 'visible') loadFromServer();
-}, 30000);
+}, 10000);
 </script>
