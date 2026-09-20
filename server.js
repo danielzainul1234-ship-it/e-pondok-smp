@@ -33,7 +33,7 @@ const MAX_BODY_BYTES = 15 * 1024 * 1024; // 15MB safety cap (base64 logo/photos 
 
 function sendJSON(res, status, obj) {
   const body = JSON.stringify(obj);
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': Buffer.byteLength(body) });
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Length': Buffer.byteLength(body) });
   res.end(body);
 }
 
@@ -56,7 +56,11 @@ function getCurrentRevision(cb) {
 function handleGetData(req, res) {
   getCurrentRevision((rev) => {
     fs.readFile(DATA_FILE, 'utf8', (err, raw) => {
-      const headers = { 'Content-Type': 'application/json; charset=utf-8' };
+      // Cache-Control: no-store -- endpoint ini HARUS selalu memberi data & revisi
+      // TERBARU, tidak boleh ada browser/proxy cache di antaranya yang menyajikan
+      // jawaban lama (kalau itu terjadi, ETag/If-Match jadi tidak berguna karena
+      // client bisa saja melihat revisi basi dan berpikir datanya sudah sinkron).
+      const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
       if (rev) headers['ETag'] = rev;
       if (err) {
         const body = JSON.stringify({});
@@ -130,7 +134,7 @@ function handlePostData(req, res) {
         fs.rename(tmpFile, DATA_FILE, (err2) => {
           if (err2) return sendJSON(res, 500, { error: 'write_failed' });
           getCurrentRevision((newRev) => {
-            const headers = { 'Content-Type': 'application/json; charset=utf-8' };
+            const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
             if (newRev) headers['ETag'] = newRev;
             const body = JSON.stringify({ ok: true });
             res.writeHead(200, { ...headers, 'Content-Length': Buffer.byteLength(body) });
