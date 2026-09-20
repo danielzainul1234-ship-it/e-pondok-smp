@@ -960,6 +960,12 @@ let saveDebounceTimer = null;
 let lastSyncedJSON = null;
 let isApplyingRemoteData = false;
 let hadLocalCacheOnBoot = false;
+// Revisi data server yang terakhir kali diketahui perangkat ini (dari header
+// ETag saat GET/POST /api/data berhasil). Dikirim balik sebagai If-Match saat
+// menyimpan supaya server bisa mendeteksi kalau perangkat LAIN sudah menyimpan
+// perubahan yang lebih baru sejak kita terakhir memuat data -- lihat
+// syncToServer() untuk penanganan konfliknya.
+let serverRevision = null;
 
 function collectSyncPayload(){
   return {
@@ -1040,9 +1046,25 @@ function saveToStorage(){
 function syncToServer(json){
   if(typeof fetch !== 'function') return;
   lastSyncedJSON = json;
-  fetch(SYNC_API_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body: json })
+  const headers = {'Content-Type':'application/json'};
+  if(serverRevision) headers['If-Match'] = serverRevision;
+  fetch(SYNC_API_URL, { method:'POST', headers, body: json })
     .then(res=>{
+      if(res.status === 409){
+        // Perangkat LAIN sudah menyimpan perubahan lebih baru sejak kita
+        // terakhir memuat data -- JANGAN anggap ini tersinkron (supaya kita
+        // tidak diam-diam kehilangan data), muat ulang data terbaru dari
+        // server, dan beri tahu pengguna secara terbuka apa yang terjadi
+        // (alih-alih perubahan mereka hilang tanpa penjelasan).
+        lastSyncedJSON = null;
+        if(typeof toast === 'function'){
+          toast('Ada pembaruan data terbaru dari perangkat lain. Perubahan Anda barusan belum tersimpan -- data telah dimuat ulang, silakan simpan kembali perubahan Anda.', 'err');
+        }
+        return loadFromServer();
+      }
       if(!res.ok) throw new Error('HTTP '+res.status);
+      const rev = res.headers.get('ETag');
+      if(rev) serverRevision = rev;
       serverSyncFailWarned = false;
     })
     .catch(err=>{
@@ -1073,10 +1095,22 @@ function loadFromServer(){
   if(typeof fetch !== 'function') return Promise.resolve();
   return fetch(SYNC_API_URL).then(res=>{
     if(!res.ok) throw new Error('HTTP '+res.status);
+    const rev = res.headers.get('ETag');
+    if(rev) serverRevision = rev;
     return res.json();
   }).then(data=>{
     if(data && typeof data === 'object' && Object.keys(data).length){
       // Server sudah punya data bersama -- pakai itu sebagai sumber kebenaran di semua perangkat.
+      // Jangan menimpa form/modal yang sedang aktif diisi pengguna (mis. saat
+      // ini terpicu oleh penyegaran otomatis di latar belakang, bukan saat boot),
+      // dan jangan menimpa perubahan lokal yang BELUM sempat tersinkron ke server
+      // (masih dalam antrean debounce/permintaan jaringan) -- kalau tidak, revisi
+      // yang kita muat di sini sudah cukup untuk permintaan simpan kita berikutnya
+      // (lihat If-Match di syncToServer), jadi aman untuk cukup berhenti di sini.
+      const hasPendingLocalChange = (()=>{ try{ return JSON.stringify(collectSyncPayload()) !== lastSyncedJSON; }catch(e){ return false; } })();
+      if(document.getElementById('activeModal') || hasPendingLocalChange){
+        return;
+      }
       isApplyingRemoteData = true;
       applySyncPayload(data);
       const json = JSON.stringify(collectSyncPayload());
@@ -1128,9 +1162,10 @@ const MENU = [
     { key:"safinah-progres", label:"Progres Safinah" },
     { key:"safinah-rekap", label:"Rekap Safinah", roles:["admin","ustadz","pengurus"] }
   ]},
-  { key:"setoranWirid", label:"Setoran Wirid", icon:"&#128255;", roles:["admin","pengurus","ustadz"], children:[
-    { key:"wirid-setoran", label:"Setoran Wirid" },
-    { key:"wirid-rekap", label:"Rekap Wirid" }
+  { key:"setoranWirid", label:"Setoran Wirid", icon:"&#128255;", roles:["admin","pengurus","ustadz","santri"], children:[
+    { key:"wirid-setoran", label:"Setoran Wirid", roles:["admin","ustadz","pengurus"] },
+    { key:"wirid-progres", label:"Progres Wirid" },
+    { key:"wirid-rekap", label:"Rekap Wirid", roles:["admin","ustadz","pengurus"] }
   ]},
   { key:"absensi", label:"Absensi", icon:"&#128203;", roles:["admin","pengurus"], children:[
     { key:"absensi-kegiatan", label:"Absensi Kegiatan" },
@@ -1922,7 +1957,7 @@ function breadcrumbFor(){
     'kegiatan-kalender':['Kegiatan','Kalender Kegiatan'], 'kegiatan-daftar':['Kegiatan','Daftar Kegiatan'], 'kegiatan-tambah':['Kegiatan','Tambah Kegiatan'],
     'quran-setoran':["Hafalan Al-Qur'an",'Setoran Hafalan'], 'quran-progres':["Hafalan Al-Qur'an",'Progres Hafalan'], 'quran-rekap':["Hafalan Al-Qur'an",'Rekap Hafalan'],
     'safinah-setoran':['Hafalan Safinah','Setoran Safinah'], 'safinah-progres':['Hafalan Safinah','Progres Safinah'], 'safinah-rekap':['Hafalan Safinah','Rekap Safinah'],
-    'wirid-setoran':['Setoran Wirid','Setoran Wirid'], 'wirid-rekap':['Setoran Wirid','Rekap Wirid'],
+    'wirid-setoran':['Setoran Wirid','Setoran Wirid'], 'wirid-progres':['Setoran Wirid','Progres Wirid'], 'wirid-rekap':['Setoran Wirid','Rekap Wirid'],
     'absensi-kegiatan':['Absensi','Absensi Kegiatan'], 'absensi-rekap':['Absensi','Rekap Absensi'],
     'laporan-santri':['Laporan','Laporan Santri'], 'laporan-kegiatan':['Laporan','Laporan Kegiatan'], 'laporan-quran':['Laporan',"Laporan Al-Qur'an"], 'laporan-safinah':['Laporan','Laporan Safinah'], 'laporan-wirid':['Laporan','Laporan Wirid'], 'laporan-absensi':['Laporan','Laporan Absensi'],
     'pengumuman':['Pengumuman'], 'pengaturan':['Pengaturan']
@@ -3180,6 +3215,30 @@ VIEWS['wirid-setoran'] = {
   }
 };
 
+VIEWS['wirid-progres'] = {
+  render(){
+    const isSantri = STATE.currentUser.role==='santri';
+    const targetList = isSantri ? DB.santri.filter(s=>s.id===STATE.currentUser.santriId) : DB.santri;
+    return `${pageHead('Progres Setoran Wirid', 'Riwayat & ringkasan setoran wirid per santri')}
+    <div style="display:flex;flex-direction:column;gap:16px;">
+    ${targetList.length ? targetList.map(s=>{
+      const records = DB.setoranWirid.filter(w=>w.santriId===s.id).sort((a,b)=>b.tanggal.localeCompare(a.tanggal));
+      const rata = records.length ? Math.round(records.reduce((a,x)=>a+x.nilai,0)/records.length) : null;
+      return `<div class="card card-pad">
+        <div class="row-between" style="margin-bottom:12px;">
+          <div style="display:flex;align-items:center;gap:10px;"><div class="avatar" style="width:36px;height:36px;font-size:12px;">${initials(s.nama)}</div><div><b>${esc(s.nama)}</b><div style="font-size:11.5px;color:var(--text-muted);">${esc(s.kelas)} • ${records.length} catatan setoran</div></div></div>
+          <div style="font-weight:800;color:var(--info);font-size:16px;">${rata!==null ? rata : '-'}</div>
+        </div>
+        ${records.length ? `<div class="table-wrap"><table><thead><tr><th>Tanggal</th><th>Jenis</th><th>Nilai</th><th>Kelancaran</th><th>Penyimak</th></tr></thead>
+        <tbody>${records.map(w=>`<tr><td>${fmtDateShort(w.tanggal)}</td><td>${esc(w.jenis)}</td><td>${w.nilai}</td><td>${kelancaranPill(w.kelancaran)}</td><td>${esc(w.penyimak)}</td></tr>`).join('')}</tbody></table></div>`
+        : `<div class="empty-state" style="padding:16px;">Belum ada catatan setoran wirid.</div>`}
+      </div>`;
+    }).join('') : `<div class="card card-pad"><div class="empty-state" style="padding:24px;">Data profil santri untuk akun ini belum terhubung. Silakan hubungi admin pondok.</div></div>`}
+    </div>`;
+  },
+  bind(){}
+};
+
 VIEWS['wirid-rekap'] = {
   render(){
     const totalSetoran = DB.setoranWirid.length;
@@ -3680,4 +3739,24 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
 loadFromStorage(); // tampilkan cache lokal dulu, biar cepat
 render();
 loadFromServer();  // lalu segarkan dengan data terbaru dari server (sinkron antar perangkat)
+
+/* ============================================================
+   PENYEGARAN OTOMATIS ANTAR PERANGKAT
+   Tab/perangkat yang dibiarkan terbuka lama (mis. HP yang tidak
+   ditutup, atau tab lain di laptop yang sama) bisa punya data yang
+   sudah basi dibanding perubahan terbaru admin di perangkat lain.
+   Supaya ini tidak mengendap lama (dan berisiko balik menimpa data
+   terbaru -- lihat catatan If-Match di syncToServer), kita muat
+   ulang data dari server: (1) setiap kali tab ini menjadi aktif
+   kembali (mis. pengguna beralih dari HP balik ke laptop), dan
+   (2) secara berkala tiap 30 detik selagi tab ini aktif dilihat.
+   loadFromServer() sendiri sudah aman dipanggil berulang -- ia
+   melewati render() kalau ada modal/form yang sedang aktif diisi.
+   ============================================================ */
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState === 'visible') loadFromServer();
+});
+setInterval(()=>{
+  if(document.visibilityState === 'visible') loadFromServer();
+}, 30000);
 </script>
