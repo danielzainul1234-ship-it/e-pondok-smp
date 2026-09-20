@@ -1046,11 +1046,20 @@ function saveToStorage(){
 function syncToServer(json){
   if(typeof fetch !== 'function') return;
   lastSyncedJSON = json;
-  const headers = {'Content-Type':'application/json'};
-  if(serverRevision) headers['If-Match'] = serverRevision;
-  fetch(SYNC_API_URL, { method:'POST', headers, body: json, cache:'no-store' })
-    .then(res=>{
-      if(res.status === 409){
+  // Titipkan revisi terakhir yang kita ketahui sebagai field `_rev` DI DALAM
+  // body JSON (bukan header HTTP) -- lihat catatan di server.js: header
+  // ETag/If-Match ternyata tidak selalu sampai ke browser secara konsisten
+  // di balik proxy/edge hosting, sedangkan body JSON selalu utuh sampai tujuan.
+  let bodyToSend = json;
+  try{
+    const parsed = JSON.parse(json);
+    if(serverRevision) parsed._rev = serverRevision;
+    bodyToSend = JSON.stringify(parsed);
+  }catch(e){ /* biarkan bodyToSend = json apa adanya kalau parse gagal */ }
+  fetch(SYNC_API_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body: bodyToSend, cache:'no-store' })
+    .then(res=>res.json().catch(()=>({})).then(responseData=>({status:res.status, responseData})))
+    .then(({status, responseData})=>{
+      if(status === 409){
         // Perangkat LAIN sudah menyimpan perubahan lebih baru sejak kita
         // terakhir memuat data -- JANGAN anggap ini tersinkron (supaya kita
         // tidak diam-diam kehilangan data), muat ulang data terbaru dari
@@ -1062,9 +1071,8 @@ function syncToServer(json){
         }
         return loadFromServer();
       }
-      if(!res.ok) throw new Error('HTTP '+res.status);
-      const rev = res.headers.get('ETag');
-      if(rev) serverRevision = rev;
+      if(status < 200 || status >= 300) throw new Error('HTTP '+status);
+      if(responseData && responseData._rev) serverRevision = responseData._rev;
       serverSyncFailWarned = false;
     })
     .catch(err=>{
@@ -1095,10 +1103,9 @@ function loadFromServer(){
   if(typeof fetch !== 'function') return Promise.resolve();
   return fetch(SYNC_API_URL, { cache:'no-store' }).then(res=>{
     if(!res.ok) throw new Error('HTTP '+res.status);
-    const rev = res.headers.get('ETag');
-    if(rev) serverRevision = rev;
     return res.json();
   }).then(data=>{
+    if(data && typeof data === 'object' && data._rev) serverRevision = data._rev;
     if(data && typeof data === 'object' && Object.keys(data).length){
       // Server sudah punya data bersama -- pakai itu sebagai sumber kebenaran di semua perangkat.
       // Jangan menimpa form/modal yang sedang aktif diisi pengguna (mis. saat

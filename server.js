@@ -38,10 +38,18 @@ function sendJSON(res, status, obj) {
 }
 
 // Revisi data saat ini = mtime file data (dalam ms, sebagai string) -- dipakai
-// sebagai ETag/If-Match sederhana supaya perangkat yang datanya sudah basi
+// sebagai penanda versi sederhana supaya perangkat yang datanya sudah basi
 // (mis. tab HP/laptop yang dibuka lama & belum memuat ulang) tidak diam-diam
 // MENIMPA perubahan terbaru dari perangkat lain dengan data lamanya (lihat
 // catatan "optimistic concurrency" di bawah).
+//
+// Catatan: revisi ini dikirim lewat FIELD DI DALAM BODY JSON (`_rev`), BUKAN
+// header HTTP (ETag/If-Match) -- percobaan awal memakai header ETag ternyata
+// tidak sampai ke browser secara konsisten di balik proxy/edge Railway (header
+// khusus ini tampak "hilang" walau Cache-Control tetap sampai), jadi supaya
+// tidak bergantung pada perilaku header yang di luar kendali kita, revisi
+// dititipkan sebagai field biasa di dalam data JSON yang memang sudah kita
+// kirim bolak-balik.
 function getCurrentRevision(cb) {
   fs.stat(DATA_FILE, (err, stat) => {
     if (err) return cb(null); // belum ada data sama sekali -> revisi awal
@@ -49,30 +57,26 @@ function getCurrentRevision(cb) {
   });
 }
 
-// GET /api/data -> the current shared app state (or {} if nothing saved yet).
-// Revisi saat ini dikirim lewat header ETag supaya client tahu "versi" data
-// yang baru saja dia muat, dan bisa mengirimkannya kembali sebagai If-Match
-// saat menyimpan (lihat handlePostData).
+// GET /api/data -> the current shared app state (or {} if nothing saved yet),
+// dengan field `_rev` disisipkan ke dalam objeknya supaya client tahu "versi"
+// data yang baru saja dia muat, dan bisa mengirimkannya kembali saat menyimpan
+// (lihat handlePostData).
 function handleGetData(req, res) {
   getCurrentRevision((rev) => {
     fs.readFile(DATA_FILE, 'utf8', (err, raw) => {
       // Cache-Control: no-store -- endpoint ini HARUS selalu memberi data & revisi
       // TERBARU, tidak boleh ada browser/proxy cache di antaranya yang menyajikan
-      // jawaban lama (kalau itu terjadi, ETag/If-Match jadi tidak berguna karena
+      // jawaban lama (kalau itu terjadi, deteksi konflik jadi tidak berguna karena
       // client bisa saja melihat revisi basi dan berpikir datanya sudah sinkron).
       const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
-      if (rev) headers['ETag'] = rev;
+      let payload;
       if (err) {
-        const body = JSON.stringify({});
-        res.writeHead(200, { ...headers, 'Content-Length': Buffer.byteLength(body) });
-        return res.end(body);
+        payload = {};
+      } else {
+        try { payload = JSON.parse(raw); } catch (e) { payload = {}; }
       }
-      let body;
-      try {
-        body = JSON.stringify(JSON.parse(raw));
-      } catch (e) {
-        body = JSON.stringify({});
-      }
+      if (rev) payload._rev = rev;
+      const body = JSON.stringify(payload);
       res.writeHead(200, { ...headers, 'Content-Length': Buffer.byteLength(body) });
       res.end(body);
     });
@@ -80,13 +84,13 @@ function handleGetData(req, res) {
 }
 
 // POST /api/data -> replace the shared app state with the given JSON body.
-// Optimistic concurrency: client mengirim header If-Match berisi revisi
-// terakhir yang dia MUAT (dari GET sebelumnya). Kalau revisi itu sudah tidak
-// cocok lagi dengan revisi saat ini di server -- artinya ada perangkat LAIN
-// yang sudah menyimpan perubahan lebih baru sejak client ini terakhir memuat
-// data -- tolak dengan 409 Conflict alih-alih diam-diam menimpanya. Ini
+// Optimistic concurrency: client mengirim field `_rev` di dalam body berisi
+// revisi terakhir yang dia MUAT (dari GET sebelumnya). Kalau revisi itu sudah
+// tidak cocok lagi dengan revisi saat ini di server -- artinya ada perangkat
+// LAIN yang sudah menyimpan perubahan lebih baru sejak client ini terakhir
+// memuat data -- tolak dengan 409 Conflict alih-alih diam-diam menimpanya. Ini
 // mencegah tab/perangkat yang datanya sudah basi menghapus perubahan terbaru
-// admin tanpa disadari. Client lama yang belum mengirim If-Match (mis. cache
+// admin tanpa disadari. Client lama yang belum mengirim `_rev` (mis. cache
 // browser yang belum memuat versi baru ini) tetap diperbolehkan menyimpan
 // seperti sebelumnya, supaya transisi tidak mendadak memblokir siapa pun.
 function handlePostData(req, res) {
@@ -118,9 +122,13 @@ function handlePostData(req, res) {
       return sendJSON(res, 400, { error: 'invalid_payload' });
     }
 
-    const ifMatch = req.headers['if-match'];
+    // Ambil & buang field `_rev` -- ini metadata protokol sinkronisasi, bukan
+    // bagian dari data aplikasi, jadi jangan sampai ikut tersimpan permanen.
+    const clientRev = data._rev;
+    delete data._rev;
+
     getCurrentRevision((currentRev) => {
-      if (ifMatch && currentRev && ifMatch !== currentRev) {
+      if (clientRev && currentRev && clientRev !== currentRev) {
         // Data di server sudah berubah sejak client ini terakhir memuatnya --
         // JANGAN timpa. Beri tahu client supaya dia memuat ulang data terbaru
         // lalu (kalau perlu) mengulang penyimpanannya di atas data terbaru itu.
@@ -134,11 +142,7 @@ function handlePostData(req, res) {
         fs.rename(tmpFile, DATA_FILE, (err2) => {
           if (err2) return sendJSON(res, 500, { error: 'write_failed' });
           getCurrentRevision((newRev) => {
-            const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
-            if (newRev) headers['ETag'] = newRev;
-            const body = JSON.stringify({ ok: true });
-            res.writeHead(200, { ...headers, 'Content-Length': Buffer.byteLength(body) });
-            res.end(body);
+            sendJSON(res, 200, { ok: true, _rev: newRev || null });
           });
         });
       });
