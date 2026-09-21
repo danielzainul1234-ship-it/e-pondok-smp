@@ -956,10 +956,28 @@ const STORAGE_KEY = 'epondokSmpDataV1';
 const SYNC_API_URL = '/api/data';
 let storageQuotaWarned = false;
 let serverSyncFailWarned = false;
-let saveDebounceTimer = null;
 let lastSyncedJSON = null;
 let isApplyingRemoteData = false;
 let hadLocalCacheOnBoot = false;
+// PENTING -- arsitektur sinkronisasi (diperbaiki total supaya tidak ada lagi data yang
+// hilang saat mengisi banyak data dengan cepat berturut-turut):
+// Versi lama menunda pengiriman lewat "debounce" (menunggu admin berhenti mengetik
+// sejenak) yang lalu ditambal jadi "throttle" (paksa kirim tiap 1.5 detik). Keduanya
+// tetap punya jendela waktu di mana data terbaru BELUM terkirim -- kalau tab ditutup
+// tepat di jendela itu, data itu hilang untuk selamanya. Ini kemungkinan besar
+// penyebab laporan "isi 5 data, yang tersimpan cuma 2".
+//
+// Solusi yang benar: TIDAK ADA lagi penundaan buatan sama sekali. Setiap perubahan
+// nyata langsung dicoba dikirim ke server SAAT ITU JUGA. Satu-satunya alasan
+// permintaan sebelumnya perlu ditunda adalah supaya dua permintaan tidak pernah
+// berjalan BERSAMAAN (kalau dua permintaan tumpang tindih, permintaan yang lebih
+// BARU bisa saja selesai duluan lalu permintaan yang lebih LAMA menyusul dan
+// menimpanya dengan data basi). Jadi antriannya sederhana: kalau sedang ada
+// permintaan berjalan, perubahan berikutnya cukup dicatat di `pendingSyncJSON`
+// dan OTOMATIS dikirim (dengan data TERBARU, bukan data yang sudah using) begitu
+// permintaan yang sedang berjalan selesai -- lihat doSyncNow().
+let syncInFlight = false;
+let pendingSyncJSON = null;
 // Revisi data server yang terakhir kali diketahui perangkat ini (dari header
 // ETag saat GET/POST /api/data berhasil). Dikirim balik sebagai If-Match saat
 // menyimpan supaya server bisa mendeteksi kalau perangkat LAIN sudah menyimpan
@@ -1035,16 +1053,73 @@ function saveToStorage(){
     }
   }
   // Sinkronkan ke server supaya perangkat lain (HP/laptop) melihat data yang sama.
-  // Di-debounce supaya render() yang terjadi berkali-kali (navigasi, buka menu, dst.)
-  // tidak mengirim request berulang -- hanya dikirim begitu perubahan "diam" sejenak.
+  // Tidak ada penundaan sama sekali -- lihat catatan besar di atas dekat deklarasi
+  // syncInFlight/pendingSyncJSON untuk alasannya.
   if(json && json !== lastSyncedJSON){
-    clearTimeout(saveDebounceTimer);
-    saveDebounceTimer = setTimeout(()=>syncToServer(json), 600);
+    if(syncInFlight){
+      // Ada permintaan lain yang masih dalam perjalanan ke server -- jangan kirim
+      // bersamaan. Simpan data TERBARU ini; begitu permintaan yang sedang berjalan
+      // selesai, doSyncNow() otomatis mengirim data terbaru ini juga.
+      pendingSyncJSON = json;
+    } else {
+      doSyncNow(json);
+    }
   }
 }
 
-function syncToServer(json){
-  if(typeof fetch !== 'function') return;
+function doSyncNow(json){
+  syncInFlight = true;
+  pendingSyncJSON = null;
+  syncToServer(json, ()=>{
+    syncInFlight = false;
+    // Selama request di atas berjalan, mungkin ada perubahan BARU lagi yang masuk
+    // (mis. admin lanjut mengisi santri berikutnya) -- kirim itu sekarang juga,
+    // jangan tunggu apa-apa lagi.
+    if(pendingSyncJSON && pendingSyncJSON !== lastSyncedJSON){
+      const next = pendingSyncJSON;
+      pendingSyncJSON = null;
+      doSyncNow(next);
+    }
+  });
+}
+
+// Jaring pengaman TAMBAHAN (bukan yang utama lagi -- lihat catatan besar di dekat
+// deklarasi syncInFlight/pendingSyncJSON untuk perbaikan utamanya): begitu
+// tab/halaman akan ditinggalkan atau disembunyikan (pindah tab, kunci layar HP,
+// tutup tab/browser) SEMENTARA masih ada request yang sedang berjalan (jadi belum
+// sempat dikirim oleh doSyncNow), coba PAKSA kirim SAAT ITU JUGA lewat
+// navigator.sendBeacon. Catatan jujur: sendBeacon (dan fetch keepalive) punya
+// batas ukuran body ~64KB di Chromium, sedangkan data aplikasi ini bisa jauh lebih
+// besar dari itu (pernah terukur ~100KB) -- jadi ini TIDAK bisa diandalkan sebagai
+// satu-satunya jaring pengaman, hanya lapisan tambahan kalau kebetulan berhasil.
+function flushPendingSaveIfNeeded(){
+  try{
+    const json = JSON.stringify(collectSyncPayload());
+    if(!json || json === lastSyncedJSON) return; // tidak ada perubahan yang belum tersimpan
+    let bodyStr = json;
+    try{
+      const parsed = JSON.parse(json);
+      if(serverRevision) parsed._rev = serverRevision;
+      bodyStr = JSON.stringify(parsed);
+    }catch(e){ /* kirim apa adanya kalau parse gagal */ }
+    let sent = false;
+    if(typeof navigator !== 'undefined' && navigator.sendBeacon){
+      try{ sent = navigator.sendBeacon(SYNC_API_URL, new Blob([bodyStr], {type:'application/json'})); }catch(e){ sent = false; }
+    }
+    if(!sent && typeof fetch === 'function'){
+      // Fallback untuk browser lama yang tidak dukung sendBeacon -- keepalive:true
+      // membuat fetch ini tetap diusahakan terkirim walau halaman sedang unload.
+      try{ fetch(SYNC_API_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body:bodyStr, keepalive:true, cache:'no-store' }); }catch(e){}
+    }
+    // Anggap terkirim (optimis) -- ini permintaan searah tanpa bisa membaca respons
+    // (termasuk kemungkinan konflik 409), jadi kalau memang gagal/konflik, siklus
+    // penyegaran normal (loadFromServer saat halaman dibuka lagi) akan meluruskannya.
+    lastSyncedJSON = json;
+  }catch(e){ console.warn('Gagal flush data sebelum halaman ditutup:', e); }
+}
+
+function syncToServer(json, onDone){
+  if(typeof fetch !== 'function'){ if(onDone) onDone(); return; }
   lastSyncedJSON = json;
   // Titipkan revisi terakhir yang kita ketahui sebagai field `_rev` DI DALAM
   // body JSON (bukan header HTTP) -- lihat catatan di server.js: header
@@ -1081,7 +1156,8 @@ function syncToServer(json){
         serverSyncFailWarned = true;
         toast('Gagal menyinkronkan data ke server. Periksa koneksi internet Anda -- perubahan tersimpan sementara di perangkat ini saja.', 'err');
       }
-    });
+    })
+    .finally(()=>{ if(onDone) onDone(); });
 }
 
 function loadFromStorage(){
@@ -3795,10 +3871,16 @@ loadFromServer();  // lalu segarkan dengan data terbaru dari server (sinkron ant
    ============================================================ */
 document.addEventListener('visibilitychange', ()=>{
   if(document.visibilityState === 'visible') loadFromServer();
+  else flushPendingSaveIfNeeded(); // tab disembunyikan/dipindah -- amankan dulu perubahan yang belum sempat tersinkron
 });
 window.addEventListener('focus', ()=>{
   if(document.visibilityState === 'visible') loadFromServer();
 });
+// Jaring pengaman terakhir: tab/browser benar-benar ditutup atau dinavigasi keluar
+// dari halaman ini. 'pagehide' lebih dapat diandalkan daripada 'beforeunload' di
+// banyak browser HP modern (termasuk saat masuk ke bfcache), jadi keduanya dipasang.
+window.addEventListener('pagehide', flushPendingSaveIfNeeded);
+window.addEventListener('beforeunload', flushPendingSaveIfNeeded);
 setInterval(()=>{
   if(document.visibilityState === 'visible') loadFromServer();
 }, 10000);
