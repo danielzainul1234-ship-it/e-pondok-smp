@@ -1236,7 +1236,22 @@ function loadFromServer(){
       const appEl = document.getElementById('app');
       const isTypingInField = !!(activeEl && appEl && appEl.contains(activeEl) && ['INPUT','TEXTAREA','SELECT'].includes(activeEl.tagName));
       const hasPendingLocalChange = (()=>{ try{ return JSON.stringify(collectSyncPayload()) !== lastSyncedJSON; }catch(e){ return false; } })();
-      if(document.getElementById('activeModal') || hasPendingLocalChange || isTypingInField){
+      // PENTING -- perbaikan bug "baru saja isi data, tapi kok tidak update":
+      // `lastSyncedJSON` di atas ditulis OPTIMISTIS di awal syncToServer(), SEBELUM
+      // permintaan simpan itu benar-benar dikonfirmasi berhasil oleh server (lihat
+      // doSyncNow/syncToServer). Artinya ada jeda singkat -- biasanya di bawah
+      // satu detik, tapi bisa terjadi -- di mana `hasPendingLocalChange` di atas
+      // SUDAH terlihat "tidak ada perubahan" padahal permintaan simpannya SENDIRI
+      // belum selesai. Kalau tepat di jeda itu penyegaran otomatis latar belakang
+      // ini kebetulan berjalan dan server yang dibaca ternyata BELUM sempat
+      // menyimpan perubahan kita (mis. baru saja menambah santri), data yang baru
+      // saja ditambahkan bisa TERLIHAT hilang lagi di layar -- padahal sebenarnya
+      // masih dalam proses tersimpan dan akan tetap sampai ke server. Supaya ini
+      // tidak terjadi, selama masih ada permintaan simpan yang sedang berjalan
+      // (`syncInFlight`) atau sudah mengantre menunggu giliran (`pendingSyncJSON`),
+      // JANGAN dulu menimpa tampilan dengan data dari server -- tunggu sampai
+      // permintaan simpan kita sendiri benar-benar selesai lebih dulu.
+      if(document.getElementById('activeModal') || hasPendingLocalChange || isTypingInField || syncInFlight || pendingSyncJSON){
         return;
       }
       isApplyingRemoteData = true;
