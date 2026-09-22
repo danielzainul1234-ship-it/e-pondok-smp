@@ -629,11 +629,17 @@ const STATE = {
 };
 
 /* ---------- Dummy user accounts ---------- */
-const USERS = [
-  { username:"admin", password:"admin123", role:"admin", nama:"Ust. Abdurrahman Hakim", email:"admin@alfalah.sch.id", jabatan:"Administrator Sistem" },
-  { username:"pengurus", password:"pengurus123", role:"pengurus", nama:"Fajar Nur Ilmi", email:"pengurus@alfalah.sch.id", jabatan:"Ketua Pengurus" },
-  { username:"ustadz", password:"ustadz123", role:"ustadz", nama:"Ust. Muhammad Zaki", email:"ustadz@alfalah.sch.id", jabatan:"Pembina Tahfidz" },
-  { username:"santri", password:"santri123", role:"santri", nama:"Ahmad Fauzan Ramadhan", email:"santri@alfalah.sch.id", jabatan:"Santri Kelas 7A", santriId:"S001" }
+// Data akun login BAWAAN (dipakai hanya untuk mengisi DB.users pertama kali).
+// PENTING: setelah ini, sumber kebenaran akun login adalah DB.users (bagian dari
+// data yang disinkron ke server), BUKAN konstanta ini -- supaya kalau admin
+// mengubah username/password lewat menu Pengaturan > Pengaturan Akun, perubahan
+// itu benar-benar tersimpan dan tersinkron ke semua perangkat, bukan hilang lagi
+// setiap kali halaman dimuat ulang (lihat juga applySyncPayload/collectSyncPayload).
+const USERS_SEED = [
+  { id:"U001", username:"admin", password:"admin123", role:"admin", nama:"Ust. Abdurrahman Hakim", email:"admin@alfalah.sch.id", jabatan:"Administrator Sistem" },
+  { id:"U002", username:"pengurus", password:"pengurus123", role:"pengurus", nama:"Fajar Nur Ilmi", email:"pengurus@alfalah.sch.id", jabatan:"Ketua Pengurus" },
+  { id:"U003", username:"ustadz", password:"ustadz123", role:"ustadz", nama:"Ust. Muhammad Zaki", email:"ustadz@alfalah.sch.id", jabatan:"Pembina Tahfidz" },
+  { id:"U004", username:"santri", password:"santri123", role:"santri", nama:"Ahmad Fauzan Ramadhan", email:"santri@alfalah.sch.id", jabatan:"Santri Kelas 7A", santriId:"S001" }
 ];
 
 const ROLE_LABEL = { admin:"Admin", pengurus:"Pengurus", ustadz:"Ustadz/Ustadzah", santri:"Santri" };
@@ -800,6 +806,7 @@ function genSantri(){
   return list;
 }
 const DB = { santri: genSantri() };
+DB.users = USERS_SEED.map(u=>({...u}));
 DB.kelasList = [...KELAS_LIST];
 DB.kamarList = [...KAMAR_PUTRA.map(n=>({nama:n, asrama:'Putra'})), ...KAMAR_PUTRI.map(n=>({nama:n, asrama:'Putri'}))];
 
@@ -988,6 +995,7 @@ let serverRevision = null;
 function collectSyncPayload(){
   return {
     settings: STATE.settings,
+    users: DB.users,
     santri: DB.santri,
     pengurus: DB.pengurus,
     kegiatan: DB.kegiatan,
@@ -1020,6 +1028,22 @@ function normalizeSafinahBab(){
 function applySyncPayload(data){
   if(!data || typeof data !== 'object') return;
   if(data.settings && typeof data.settings === 'object') Object.assign(STATE.settings, data.settings);
+  // Kalau server belum pernah punya field `users` sama sekali (mis. data lama dari
+  // sebelum fitur kelola akun ini ada), JANGAN kosongkan DB.users -- biarkan tetap
+  // memakai data bawaan/sebelumnya supaya akun admin/pengurus/ustadz/santri yang
+  // sudah ada tidak tiba-tiba tidak bisa login.
+  if(Array.isArray(data.users) && data.users.length) DB.users = data.users;
+  // DB.users di atas baru saja diganti dengan array (objek) yang SAMA SEKALI BARU --
+  // kalau ada pengguna yang sedang login di tab ini, referensi STATE.currentUser
+  // masih menunjuk ke objek LAMA dan tidak akan ikut ter-update (mis. kalau
+  // username/password/nama-nya baru saja diubah admin dari perangkat lain).
+  // Cari ulang berdasarkan `id` (bukan username, karena username itu sendiri bisa
+  // saja baru diubah) supaya sesi yang sedang berjalan tetap melihat data terbaru
+  // tentang dirinya sendiri, tanpa perlu logout/login ulang.
+  if(STATE.currentUser){
+    const fresh = DB.users.find(x=>x.id===STATE.currentUser.id);
+    if(fresh) STATE.currentUser = fresh;
+  }
   if(Array.isArray(data.santri)) DB.santri = data.santri;
   if(Array.isArray(data.pengurus)) DB.pengurus = data.pengurus;
   if(Array.isArray(data.kegiatan)) DB.kegiatan = data.kegiatan;
@@ -1190,8 +1214,29 @@ function loadFromServer(){
       // (masih dalam antrean debounce/permintaan jaringan) -- kalau tidak, revisi
       // yang kita muat di sini sudah cukup untuk permintaan simpan kita berikutnya
       // (lihat If-Match di syncToServer), jadi aman untuk cukup berhenti di sini.
+      //
+      // PENTING -- perbaikan bug "disuruh mengisi ulang username/password sebelum
+      // selesai mengetik" (dan potensi bug serupa di form lain, mis. Pengaturan):
+      // penyegaran otomatis ini berjalan tiap ~10 detik (dan setiap kali tab
+      // difokuskan lagi) TANPA peduli sedang di halaman/form apa. Kalau saat itu
+      // render() tetap dipanggil, SELURUH isi #app diganti dari nol -- termasuk
+      // form yang sedang aktif diisi (login, Pengaturan, dsb.), sehingga apa yang
+      // baru saja diketik hilang begitu saja, persis seperti diminta mengisi ulang
+      // dari awal. `hasPendingLocalChange` di atas TIDAK cukup untuk menangkap ini,
+      // karena banyak form (termasuk login) baru menulis nilainya ke STATE saat
+      // tombol "Simpan"/submit ditekan -- selama itu belum terjadi, isi field yang
+      // sedang diketik hanya ada di DOM, bukan di STATE, jadi tidak terhitung
+      // sebagai "perubahan lokal yang tertunda". Solusinya: kalau fokus keyboard
+      // pengguna saat ini sedang berada di sebuah input/textarea/select di dalam
+      // halaman (tandanya sedang aktif mengisi sesuatu), lewati render ulang ini
+      // dulu -- data server tetap termuat di latar belakang (serverRevision sudah
+      // diperbarui di atas), hanya tampilannya yang ditunda sampai pengguna
+      // berpindah dari field tersebut.
+      const activeEl = document.activeElement;
+      const appEl = document.getElementById('app');
+      const isTypingInField = !!(activeEl && appEl && appEl.contains(activeEl) && ['INPUT','TEXTAREA','SELECT'].includes(activeEl.tagName));
       const hasPendingLocalChange = (()=>{ try{ return JSON.stringify(collectSyncPayload()) !== lastSyncedJSON; }catch(e){ return false; } })();
-      if(document.getElementById('activeModal') || hasPendingLocalChange){
+      if(document.getElementById('activeModal') || hasPendingLocalChange || isTypingInField){
         return;
       }
       isApplyingRemoteData = true;
@@ -1292,7 +1337,7 @@ function toast(msg, type){
    AUTH
    ============================================================ */
 function doLogin(username, password){
-  const u = USERS.find(x=>x.username.toLowerCase()===String(username).toLowerCase() && x.password===password);
+  const u = DB.users.find(x=>x.username.toLowerCase()===String(username).toLowerCase() && x.password===password);
   if(!u){ return false; }
   closeModal();
   STATE.currentUser = u;
@@ -2093,7 +2138,7 @@ function bindShell(){
   ['logoutBtn','logoutBtn2'].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener('click', doLogout); });
 
   const bellBtn = document.getElementById('bellBtn');
-  if(bellBtn) bellBtn.addEventListener('click', e=>{ e.stopPropagation(); const p=document.getElementById('notifPanel'); const wasHidden = p.classList.contains('hidden'); closeAllDropdowns(); if(wasHidden){ p.classList.remove('hidden'); DB.notifikasi.forEach(n=>n.dibaca=true); } });
+  if(bellBtn) bellBtn.addEventListener('click', e=>{ e.stopPropagation(); const p=document.getElementById('notifPanel'); const wasHidden = p.classList.contains('hidden'); closeAllDropdowns(); if(wasHidden){ p.classList.remove('hidden'); DB.notifikasi.forEach(n=>n.dibaca=true); saveToStorage(); } });
   const profileBtn = document.getElementById('profileBtn');
   if(profileBtn) profileBtn.addEventListener('click', e=>{ e.stopPropagation(); const p=document.getElementById('profilePanel'); const wasHidden = p.classList.contains('hidden'); closeAllDropdowns(); if(wasHidden) p.classList.remove('hidden'); });
   const themeBtn = document.getElementById('toggleThemeBtn');
@@ -3375,6 +3420,11 @@ function getAbsensiForKegiatan(kid){
   if(existing.length===0){
     DB.santri.forEach(s=>DB.absensi.push({ id:uid('A'), kegiatanId:kid, kegiatanNama:k.nama, tanggal:k.tanggal, santriId:s.id, santriNama:s.nama, kelas:s.kelas, status:'Hadir' }));
     existing = DB.absensi.filter(a=>a.kegiatanId===kid);
+    // Baris absensi default ini dibuat sebagai EFEK SAMPING saat halaman dirender
+    // (setelah saveToStorage() di awal render() sudah berjalan lebih dulu), jadi
+    // kalau tidak dipicu sendiri di sini, data baru ini bisa saja belum sempat
+    // tersinkron ke server kalau admin langsung menutup tab tanpa navigasi lain.
+    saveToStorage();
   }
   return existing;
 }
@@ -3631,6 +3681,46 @@ VIEWS['profil-saya'] = {
 };
 
 /* ============================================================
+   KELOLA AKUN PENGGUNA (khusus admin -- lihat menu Pengaturan > Pengaturan Akun)
+   ============================================================ */
+function usernameTaken(username, exceptId){
+  return DB.users.some(u=>u.username.toLowerCase()===String(username).toLowerCase() && u.id!==exceptId);
+}
+function openUserModal(id){
+  const u = DB.users.find(x=>x.id===id);
+  if(!u) return;
+  openModal(`<div class="modal-head"><h3>Edit Akun: ${esc(u.nama)}</h3><button class="btn-icon" data-close-modal>&times;</button></div>
+    <div class="modal-body">
+      <div class="field"><label>Nama</label><input class="input" value="${esc(u.nama)}" disabled></div>
+      <div class="field"><label>Role</label><input class="input" value="${esc(ROLE_LABEL[u.role]||u.role)}" disabled></div>
+      <div class="field"><label>Username</label><input class="input" id="fu_username" value="${esc(u.username)}"></div>
+      <div class="field"><label>Kata Sandi Baru</label><input type="password" class="input" id="fu_newPw" placeholder="Kosongkan jika tidak diganti"></div>
+      <div class="field"><label>Konfirmasi Kata Sandi Baru</label><input type="password" class="input" id="fu_confirmPw" placeholder="Ulangi kata sandi baru"></div>
+      <div id="userModalMsg"></div>
+      <p style="font-size:11.5px;color:var(--text-muted);margin-top:4px;">Catatan: perangkat lain yang sedang login dengan akun ini tidak otomatis keluar -- mereka perlu memakai username/kata sandi baru saat login berikutnya.</p>
+    </div>
+    <div class="modal-foot"><button class="btn btn-outline" data-close-modal>Batal</button><button class="btn btn-primary" id="saveUserBtn">Simpan</button></div>`);
+  document.getElementById('saveUserBtn').addEventListener('click', ()=>{
+    const msgBox = document.getElementById('userModalMsg');
+    msgBox.innerHTML = '';
+    const newUsername = document.getElementById('fu_username').value.trim();
+    const newPw = document.getElementById('fu_newPw').value;
+    const confirmPw = document.getElementById('fu_confirmPw').value;
+    if(!newUsername){ msgBox.innerHTML = `<div class="login-error">Username tidak boleh kosong.</div>`; return; }
+    if(usernameTaken(newUsername, u.id)){ msgBox.innerHTML = `<div class="login-error">Username tersebut sudah dipakai akun lain.</div>`; return; }
+    if(newPw || confirmPw){
+      if(newPw.length < 4){ msgBox.innerHTML = `<div class="login-error">Kata sandi baru minimal 4 karakter.</div>`; return; }
+      if(newPw !== confirmPw){ msgBox.innerHTML = `<div class="login-error">Konfirmasi kata sandi tidak cocok.</div>`; return; }
+    }
+    u.username = newUsername;
+    if(newPw) u.password = newPw;
+    toast('Akun berhasil diperbarui.');
+    closeModal();
+    navigate('pengaturan');
+  });
+}
+
+/* ============================================================
    VIEW: PENGATURAN
    ============================================================ */
 VIEWS['pengaturan'] = {
@@ -3717,14 +3807,27 @@ VIEWS['pengaturan'] = {
     <div id="tabAkun" class="tab-panel ${panelHidden('akun')}">
       <div class="card card-pad">
         <div class="section-title" style="margin-bottom:14px;">Akun Saya</div>
+        <div id="accSelfMsg"></div>
         <div class="form-grid">
           <div class="field"><label>Nama</label><input class="input" value="${esc(STATE.currentUser.nama)}" disabled></div>
           <div class="field"><label>Email</label><input class="input" value="${esc(STATE.currentUser.email)}" disabled></div>
-          <div class="field"><label>Kata Sandi Baru</label><input type="password" class="input" placeholder="••••••••"></div>
-          <div class="field"><label>Konfirmasi Kata Sandi</label><input type="password" class="input" placeholder="••••••••"></div>
+          <div class="field"><label>Username</label><input class="input" id="acc_username" value="${esc(STATE.currentUser.username)}"></div>
+          <div class="field"></div>
+          <div class="field"><label>Kata Sandi Baru</label><input type="password" class="input" id="acc_newPw" placeholder="Kosongkan jika tidak diganti"></div>
+          <div class="field"><label>Konfirmasi Kata Sandi Baru</label><input type="password" class="input" id="acc_confirmPw" placeholder="Ulangi kata sandi baru"></div>
         </div>
-        <button class="btn btn-primary" id="changePwBtn" style="margin-top:8px;">Perbarui Kata Sandi</button>
+        <button class="btn btn-primary" id="changePwBtn" style="margin-top:8px;">Simpan Perubahan Akun</button>
       </div>
+      ${STATE.currentUser.role === 'admin' ? `
+      <div class="card card-pad" style="margin-top:16px;">
+        <div class="section-title" style="margin-bottom:6px;">Kelola Akun Pengguna</div>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">Admin dapat mengubah username dan kata sandi setiap akun (Admin, Pengurus, Ustadz/Ustadzah, Santri) di sini. Perubahan langsung tersimpan dan tersinkron ke semua perangkat.</p>
+        <div class="table-wrap"><table><thead><tr><th>Nama</th><th>Role</th><th>Username</th><th class="no-print">Aksi</th></tr></thead>
+        <tbody>${DB.users.map(u=>`
+          <tr><td>${esc(u.nama)}</td><td><span class="tag-badge">${esc(ROLE_LABEL[u.role]||u.role)}</span></td><td>${esc(u.username)}</td>
+          <td class="no-print"><button class="btn-icon" data-edituser="${u.id}">&#9998;</button></td></tr>
+        `).join('')}</tbody></table></div>
+      </div>` : ''}
     </div>
     <div id="tabRole" class="tab-panel ${panelHidden('role')}">
       <div class="card card-pad">
@@ -3835,7 +3938,26 @@ VIEWS['pengaturan'] = {
       STATE.pengaturanTab = 'profil';
       toast('Profil pondok berhasil disimpan.'); render();
     });
-    const pwBtn = document.getElementById('changePwBtn'); if(pwBtn) pwBtn.addEventListener('click', ()=>toast('Kata sandi berhasil diperbarui.'));
+    const pwBtn = document.getElementById('changePwBtn');
+    if(pwBtn) pwBtn.addEventListener('click', ()=>{
+      const msgBox = document.getElementById('accSelfMsg');
+      msgBox.innerHTML = '';
+      const newUsername = document.getElementById('acc_username').value.trim();
+      const newPw = document.getElementById('acc_newPw').value;
+      const confirmPw = document.getElementById('acc_confirmPw').value;
+      if(!newUsername){ msgBox.innerHTML = `<div class="login-error">Username tidak boleh kosong.</div>`; return; }
+      if(usernameTaken(newUsername, STATE.currentUser.id)){ msgBox.innerHTML = `<div class="login-error">Username tersebut sudah dipakai akun lain.</div>`; return; }
+      if(newPw || confirmPw){
+        if(newPw.length < 4){ msgBox.innerHTML = `<div class="login-error">Kata sandi baru minimal 4 karakter.</div>`; return; }
+        if(newPw !== confirmPw){ msgBox.innerHTML = `<div class="login-error">Konfirmasi kata sandi tidak cocok.</div>`; return; }
+      }
+      // STATE.currentUser adalah REFERENSI LANGSUNG ke objek di dalam DB.users --
+      // mengubahnya di sini otomatis mengubah DB.users juga.
+      STATE.currentUser.username = newUsername;
+      if(newPw) STATE.currentUser.password = newPw;
+      toast('Perubahan akun berhasil disimpan.'); render();
+    });
+    on('[data-edituser]','click', e=>openUserModal(e.currentTarget.dataset.edituser));
     const bkBtn = document.getElementById('backupBtn'); if(bkBtn) bkBtn.addEventListener('click', ()=>{
       const json = JSON.stringify({ santri:DB.santri.length, pengurus:DB.pengurus.length, kegiatan:DB.kegiatan.length, setoranQuran:DB.setoranQuran.length, setoranSafinah:DB.setoranSafinah.length, absensi:DB.absensi.length, waktu:new Date().toISOString() });
       exportRowsToExcel('Backup-EPondokSMP.xlsx', ['Ringkasan Backup','Nilai'], [['Total Santri',DB.santri.length],['Total Pengurus',DB.pengurus.length],['Total Kegiatan',DB.kegiatan.length],['Total Setoran Quran',DB.setoranQuran.length],['Total Setoran Safinah',DB.setoranSafinah.length],['Total Absensi',DB.absensi.length],['Waktu Backup', new Date().toLocaleString('id-ID')]]);
@@ -3865,9 +3987,13 @@ loadFromServer();  // lalu segarkan dengan data terbaru dari server (sinkron ant
    terbaru -- lihat catatan If-Match di syncToServer), kita muat
    ulang data dari server: (1) setiap kali tab ini menjadi aktif
    kembali (mis. pengguna beralih dari HP balik ke laptop), dan
-   (2) secara berkala tiap 30 detik selagi tab ini aktif dilihat.
+   (2) secara berkala tiap 5 detik selagi tab ini aktif dilihat --
+   supaya pengurus/ustadz/santri yang sedang membuka layar melihat
+   perubahan data admin secepat mungkin tanpa perlu me-refresh manual.
    loadFromServer() sendiri sudah aman dipanggil berulang -- ia
-   melewati render() kalau ada modal/form yang sedang aktif diisi.
+   melewati render() kalau ada modal/form yang sedang aktif diisi,
+   ATAU kalau fokus keyboard sedang berada di sebuah input/textarea/
+   select (supaya tidak menimpa apa yang sedang diketik pengguna).
    ============================================================ */
 document.addEventListener('visibilitychange', ()=>{
   if(document.visibilityState === 'visible') loadFromServer();
@@ -3883,5 +4009,5 @@ window.addEventListener('pagehide', flushPendingSaveIfNeeded);
 window.addEventListener('beforeunload', flushPendingSaveIfNeeded);
 setInterval(()=>{
   if(document.visibilityState === 'visible') loadFromServer();
-}, 10000);
+}, 5000);
 </script>
